@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import io
+import os
 from datetime import timedelta
+from threading import Event
 from time import monotonic, sleep
 
 import pytest
 from PIL import Image
 
 from app.agent.providers.mock import _plan_tools
-from app.core.models import AgentApproval
+from app.core.models import AgentApproval, TrainingTask
 from app.core.time import utc_now
 
 
@@ -405,3 +407,56 @@ def test_approve_strips_tampered_payload_keys(client, tmp_path, monkeypatch):
     assert "shell" not in stored
     assert "model_path" not in stored
     assert stored["dataset_id"] == dataset_id
+
+
+def test_submitted_training_finishes_before_client_cleanup(client, tmp_path, monkeypatch, request):
+    """An approval may return before the worker resolves its executable."""
+    from app.training.runtime.runner import TrainingRunner
+
+    executable = tmp_path / "fake-yolo"
+    fake_yolo(executable)
+    monkeypatch.setenv("YWA_YOLO_EXECUTABLE", str(executable))
+    dataset_id, _ = prepared_dataset(client)
+    entered, release, finished = Event(), Event(), Event()
+    original_command = TrainingRunner._command
+    original_run = TrainingRunner.run
+    original_dispose = client.app.state.database.dispose
+    task_id = None
+
+    def delayed_command(self, task):
+        entered.set()
+        assert release.wait(5), "Test did not release the training worker"
+        assert os.environ.get("YWA_YOLO_EXECUTABLE") == str(executable)
+        return original_command(self, task)
+
+    def tracked_run(self, task_id):
+        try:
+            return original_run(self, task_id)
+        finally:
+            finished.set()
+
+    def checked_dispose():
+        try:
+            assert finished.is_set(), "Database disposed while training was still running"
+            with client.app.state.database.session_factory() as session:
+                task = session.get(TrainingTask, task_id)
+                assert task is not None and task.status == "completed"
+        finally:
+            original_dispose()
+
+    monkeypatch.setattr(TrainingRunner, "_command", delayed_command)
+    monkeypatch.setattr(TrainingRunner, "run", tracked_run)
+    monkeypatch.setattr(client.app.state.database, "dispose", checked_dispose)
+    # Release only when the test body has finished, immediately before fixture
+    # cleanup. The client must join the worker before undoing these patches.
+    request.addfinalizer(release.set)
+    chat_id = client.post("/api/agent/sessions", json={}).json()["id"]
+    run = client.post(
+        f"/api/agent/sessions/{chat_id}/messages?wait_for_completion=true",
+        json={"content": f"请为 {dataset_id} 创建训练任务"},
+    ).json()
+    approved = client.post(f"/api/agent/approvals/{run['approvals'][0]['id']}/approve")
+    assert approved.status_code == 200, approved.text
+    task_id = approved.json()["approval"]["result_task_id"]
+    assert entered.wait(3), "Training worker did not start"
+    assert not finished.is_set()
