@@ -6,5 +6,7 @@ export default defineConfig({
   // Konva's package main points at its Node adapter, which requires the
   // optional native canvas package. Browser UI and jsdom tests use this build.
   resolve: { alias: [{ find: /^konva$/, replacement: "konva/lib/index.js" }] },
+  // base: sub-path serving under nginx /ywa/
+  base: "/ywa/",
   server: { host: "127.0.0.1", port: 5173 },
 });
