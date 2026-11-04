@@ -135,9 +135,14 @@ describe("AnnotationCanvas OBB interactions", () => {
       root?.render(<AnnotationCanvas image={image} classes={classes} annotations={[]} activeClassId="cls-1" taskType="detect" onChange={onChange} />);
     });
 
-    const stage = container?.querySelector<HTMLDivElement>("[data-testid='stage']") as (HTMLDivElement & { getStage?: () => unknown; getClassName?: () => string; getPointerPosition?: () => { x: number; y: number } }) | null;
+    const stage = container?.querySelector<HTMLDivElement>("[data-testid='stage']") as (HTMLDivElement & { getStage?: () => unknown; getClassName?: () => string; getPointerPosition?: () => { x: number; y: number }; scaleX?: () => number; scaleY?: () => number; x?: () => number; y?: () => number }) | null;
     expect(stage).toBeTruthy();
     let position = { x: 10, y: 10 };
+    // （lg0219）滚轮缩放后 pointer() 会读舞台缩放与位移；jsdom 桩需提供这些方法。
+    stage!.scaleX = () => 1;
+    stage!.scaleY = () => 1;
+    stage!.x = () => 0;
+    stage!.y = () => 0;
     stage!.getStage = () => stage;
     stage!.getClassName = () => "Stage";
     stage!.getPointerPosition = () => position;
@@ -171,8 +176,12 @@ describe("AnnotationCanvas OBB interactions", () => {
       root?.render(<AnnotationCanvas image={image} classes={[]} annotations={[]} activeClassId="" taskType="detect" onChange={onChange} />);
     });
 
-    const stage = container?.querySelector<HTMLDivElement>("[data-testid='stage']") as (HTMLDivElement & { getStage?: () => unknown; getClassName?: () => string; getPointerPosition?: () => { x: number; y: number } }) | null;
+    const stage = container?.querySelector<HTMLDivElement>("[data-testid='stage']") as (HTMLDivElement & { getStage?: () => unknown; getClassName?: () => string; getPointerPosition?: () => { x: number; y: number }; scaleX?: () => number; scaleY?: () => number; x?: () => number; y?: () => number }) | null;
     expect(container?.textContent).toContain("请先在右侧新增一个类别");
+    stage!.scaleX = () => 1;
+    stage!.scaleY = () => 1;
+    stage!.x = () => 0;
+    stage!.y = () => 0;
     stage!.getStage = () => stage;
     stage!.getClassName = () => "Stage";
     stage!.getPointerPosition = () => ({ x: 10, y: 10 });

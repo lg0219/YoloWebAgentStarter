@@ -31,8 +31,12 @@ interface Props {
 
 const MAX_WIDTH = 900;
 const MAX_HEIGHT = 620;
+// （lg0219）画面缩放：滚轮缩放范围与缩放步进。限制仅为缩放边界，不限制使用场景。
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 8;
+const ZOOM_STEP = 1.15;
 
-type DrawingTool = "bbox" | "polygon" | "obb" | "sam" | "sam_point";
+type DrawingTool = "bbox" | "polygon" | "obb" | "sam" | "sam_point" | "hand";
 
 const taskTool = (taskType: TaskType): DrawingTool => ({ detect: "bbox", segment: "polygon", obb: "obb", classify: "bbox" } satisfies Record<TaskType, DrawingTool>)[taskType];
 
@@ -46,6 +50,9 @@ export function AnnotationCanvas({ image, classes, annotations, activeClassId, s
   const [selectedObbId, setSelectedObbId] = useState<string>();
   const [selectedBboxId, setSelectedBboxId] = useState<string>();
   const [displaySize, setDisplaySize] = useState({ width: MAX_WIDTH, height: MAX_HEIGHT });
+  // （lg0219）zoom 只作用于显示层：Stage 的 scale 与 position，不影响任何归一化坐标的计算口径。
+  const [zoom, setZoom] = useState(1);
+  const stageRef = useRef<Konva.Stage>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
   const obbRefs = useRef<Record<string, Konva.Rect | null>>({});
   const bboxRefs = useRef<Record<string, Konva.Rect | null>>({});
@@ -59,6 +66,14 @@ export function AnnotationCanvas({ image, classes, annotations, activeClassId, s
     };
     element.src = image.file_url.startsWith("http") ? image.file_url : `${(import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000").replace(/\/$/, "")}${image.file_url}`;
   }, [image]);
+
+  // （lg0219）切换图片时复位缩放与平移，避免上一张的视角残留。
+  useEffect(() => {
+    setZoom(1);
+    stageRef.current?.position({ x: 0, y: 0 });
+    stageRef.current?.scale({ x: 1, y: 1 });
+    stageRef.current?.batchDraw();
+  }, [image.id]);
 
   useEffect(() => {
     setTool(taskTool(taskType));
@@ -97,11 +112,39 @@ export function AnnotationCanvas({ image, classes, annotations, activeClassId, s
   }, [dragStart]);
 
   const toOriginal = (point: [number, number]) => toOriginalPoint(point, displaySize.width, displaySize.height, image.width, image.height);
-  const pointer = (event: { target: { getStage: () => { getPointerPosition: () => { x: number; y: number } | null } | null } }): [number, number] | undefined => {
+  // （lg0219）滚轮缩放：以鼠标指针为锚点，缩放后指针下的内容保持不动。
+  // 换算顺序：屏幕坐标 → 减去舞台位移 → 除以当前缩放 = 显示层坐标。
+  const clampPan = (position: { x: number; y: number }, scale: number) => {
+    const width = displaySize.width * scale;
+    const height = displaySize.height * scale;
+    return {
+      x: clamp(position.x, Math.min(0, displaySize.width - width), 0),
+      y: clamp(position.y, Math.min(0, displaySize.height - height), 0),
+    };
+  };
+  const handleWheel = (event: { evt: WheelEvent; target: { getStage: () => Konva.Stage | null } }) => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    event.evt.preventDefault();
+    const pointerPosition = stage.getPointerPosition();
+    if (!pointerPosition) return;
+    const next = clamp(zoom * (event.evt.deltaY > 0 ? 1 / ZOOM_STEP : ZOOM_STEP), MIN_ZOOM, MAX_ZOOM);
+    if (next === zoom) return;
+    const anchor = { x: (pointerPosition.x - stage.x()) / zoom, y: (pointerPosition.y - stage.y()) / zoom };
+    stage.scale({ x: next, y: next });
+    stage.position(clampPan({ x: pointerPosition.x - anchor.x * next, y: pointerPosition.y - anchor.y * next }, next));
+    stage.batchDraw();
+    setZoom(next);
+  };
+  const pointer = (event: { target: { getStage: () => Konva.Stage | null } }): [number, number] | undefined => {
     const stage = event.target.getStage();
     const position = stage?.getPointerPosition();
-    if (!position) return undefined;
-    return [clamp(position.x, 0, displaySize.width), clamp(position.y, 0, displaySize.height)];
+    if (!stage || !position) return undefined;
+    // （lg0219）滚轮缩放后，屏幕坐标需先还原为显示层坐标，否则画框位置会按缩放比例偏移。
+    const scale = stage.scaleX();
+    const x = (position.x - stage.x()) / scale;
+    const y = (position.y - stage.y()) / scale;
+    return [clamp(x, 0, displaySize.width), clamp(y, 0, displaySize.height)];
   };
   const toStageObb = (obb: OBB): OBB => ({ ...obb, cx: obb.cx * scale.x, cy: obb.cy * scale.y, width: obb.width * scale.x, height: obb.height * scale.y });
   const toImageObb = (obb: OBB): OBB => clampOBBToImage(
@@ -158,6 +201,8 @@ export function AnnotationCanvas({ image, classes, annotations, activeClassId, s
           <h2>{image.file_name}</h2>
         </div>
         <div className="tool-group">
+          {/* （lg0219）抓手：选中后左键拖拽平移画面，与绘制工具互斥。 */}
+          <button className={tool === "hand" ? "button active" : "button" } onClick={() => { setTool("hand"); setPolygonPoints([]); setDragStart(undefined); }} title="选中后左键拖拽可平移画面；滚轮随时可缩放">抓手</button>
           {taskType === "detect" && <button className={tool === "bbox" ? "button active" : "button"} disabled={!canAnnotate} onClick={() => { setTool("bbox"); setPolygonPoints([]); }}>BBox</button>}
           {taskType === "segment" && <><button className={tool === "polygon" ? "button active" : "button"} disabled={!canAnnotate} onClick={() => { setTool("polygon"); setDragStart(undefined); }}>Polygon</button><button className={tool === "sam" ? "button active" : "button"} disabled={!canAnnotate || samBusy || !samCapabilities?.box_prompt_available} onClick={() => { setTool("sam"); setPolygonPoints([]); }}>{samConfigured ? "SAM 框选" : "框形建议"}</button><button className={tool === "sam_point" ? "button active" : "button"} disabled={!canAnnotate || samBusy || !pointPromptAvailable} title={pointPromptAvailable ? undefined : "配置 YWA_SAM_MODEL 后可用"} onClick={() => { setTool("sam_point"); setPolygonPoints([]); }}>{pointPromptAvailable ? "SAM 点选" : "SAM 点选（需配置）"}</button></>}
           {taskType === "obb" && <><button className={tool === "obb" ? "button active" : "button"} disabled={!canAnnotate} onClick={() => { setTool("obb"); setPolygonPoints([]); }}>OBB</button><label className="angle-input">角度<input aria-label="OBB angle" type="number" value={selectedAngle} onChange={(event) => { const nextAngle = Number(event.target.value); if (!Number.isFinite(nextAngle)) return; if (selectedObb?.obb) replaceObb(selectedObb.id, { ...toStageObb(selectedObb.obb), angle: nextAngle }); else setAngle(nextAngle); }} /></label>{selectedObb && <button className="button danger" onClick={removeSelectedObb}>删除所选 OBB</button>}</>}
@@ -169,10 +214,16 @@ export function AnnotationCanvas({ image, classes, annotations, activeClassId, s
       <div className="stage-wrap">
         {imageElement ? (
           <Stage
+            ref={stageRef}
             width={displaySize.width}
             height={displaySize.height}
+            // （lg0219）抓手工具开启舞台拖拽；缩放边界由 dragBoundFunc 钳制。
+            draggable={tool === "hand"}
+            dragBoundFunc={(position) => clampPan(position, zoom)}
+            onWheel={handleWheel}
             onMouseDown={(event) => {
-              if (!activeClassId) return;
+              // （lg0219）抓手模式下左键只做平移，不触发任何绘制。
+              if (tool === "hand" || !activeClassId) return;
               const point = pointer(event);
               if (!point) return;
               if (tool !== "polygon" && !["Stage", "Layer"].includes(event.target.getClassName())) return;
@@ -184,12 +235,12 @@ export function AnnotationCanvas({ image, classes, annotations, activeClassId, s
               else setPolygonPoints((current) => [...current, point]);
             }}
             onMouseMove={(event) => {
-              if (tool === "polygon" || tool === "sam_point" || !dragStart) return;
+              if (tool === "polygon" || tool === "sam_point" || tool === "hand" || !dragStart) return;
               const point = pointer(event);
               if (point) setDragEnd(point);
             }}
             onMouseUp={(event) => {
-              if (!activeClassId || tool === "polygon" || tool === "sam_point" || !dragStart) return;
+              if (!activeClassId || tool === "polygon" || tool === "sam_point" || tool === "hand" || !dragStart) return;
               const point = pointer(event);
               if (!point) {
                 setDragStart(undefined);
@@ -211,7 +262,7 @@ export function AnnotationCanvas({ image, classes, annotations, activeClassId, s
               setDragEnd(undefined);
             }}
             onMouseLeave={() => {
-              if (tool !== "polygon" && tool !== "sam_point") {
+              if (tool !== "polygon" && tool !== "sam_point" && tool !== "hand") {
                 setDragStart(undefined);
                 setDragEnd(undefined);
               }
@@ -230,6 +281,8 @@ export function AnnotationCanvas({ image, classes, annotations, activeClassId, s
       </div>
       <div className="canvas-meta">
         <span>{image.width} × {image.height}px</span>
+        {/* （lg0219）显示当前缩放倍率，便于确认缩放是否生效。 */}
+        {zoom !== 1 && <span>缩放 {Math.round(zoom * 100)}%</span>}
         <span>{annotations.length} 个当前草稿</span>
         {polygonPoints.length > 0 && <span>{polygonPoints.length} 个多边形点</span>}
       </div>
