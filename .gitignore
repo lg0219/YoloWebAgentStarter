@@ -23,3 +23,9 @@ runs/
 *.pt
 *.onnx
 *.engine
+
+# 本地（lg0219）：pip 安装残留文件与运行日志
+=1.17.0
+=2.0.7
+*.log
+.env.local
