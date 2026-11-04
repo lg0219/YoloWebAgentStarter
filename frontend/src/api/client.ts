@@ -79,6 +79,10 @@ export const api = {
   listClasses: (datasetId: string) => request<ClassLabel[]>(`/api/datasets/${datasetId}/classes`),
   createClass: (datasetId: string, name: string, color = "#22c55e") =>
     request<ClassLabel>(`/api/datasets/${datasetId}/classes`, json({ name, color })),
+  // 新增（lg0219）：删除类别。后端 DELETE /api/datasets/{id}/classes/{classId} 已存在；
+  // 类别被标注引用时后端返回 409 class_in_use，调用方负责展示错误。
+  deleteClass: (datasetId: string, classId: string) =>
+    request<void>(`/api/datasets/${datasetId}/classes/${classId}`, { method: "DELETE" }),
   listImages: async (datasetId: string) => {
     const pageSize = 500;
     const first = await request<ImagePage>(`/api/datasets/${datasetId}/images?offset=0&limit=${pageSize}`);
