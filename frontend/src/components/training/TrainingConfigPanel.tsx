@@ -10,6 +10,7 @@ import {
   type TrainingFormState,
 } from "../../training/helpers";
 import { IconBox, IconChevron, IconGrid, IconScan, IconShapes, IconSpark } from "./icons";
+import { FieldHelp } from "./FieldHelp";
 
 interface Props {
   datasets: Dataset[];
@@ -166,7 +167,7 @@ export function TrainingConfigPanel({
               <input value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} required />
             </label>
             <label className="training-ws-field training-ws-field-wide">
-              <span>基础权重</span>
+              <span>基础权重<FieldHelp text="训练的起点权重。列表按当前数据集的任务类型自动匹配（检测 / 分割 / OBB / 分类对应不同后缀）。默认 yolo11n.pt；首次使用某个命名权重时，Ultralytics 可能联网下载对应文件。" /></span>
               <select
                 value={modelInList ? form.model : "__custom__"}
                 onChange={(event) => {
@@ -188,18 +189,18 @@ export function TrainingConfigPanel({
               </label>
             )}
             <label className="training-ws-field">
-              <span>Epochs</span>
+              <span>Epochs<FieldHelp text="把整个数据集完整训练的遍数。遍数越多收敛通常越充分，耗时也越长。范围 1~10000；预设：快速 30 / 均衡 50 / 高精度 100。" /></span>
               <input type="number" min={1} value={form.epochs} onChange={(event) => setForm((prev) => ({ ...prev, epochs: Number(event.target.value) }))} />
             </label>
             <label className="training-ws-field">
-              <span>Batch size</span>
+              <span>Batch size<FieldHelp text="每次迭代同时处理的图片数量。越大通常越快，但越占显存；越小更稳但更慢。可选 1~64；预设：快速与均衡 16，高精度 8。" /></span>
               <select value={String(form.batch_size)} onChange={(event) => setForm((prev) => ({ ...prev, batch_size: Number(event.target.value) }))}>
                 {!BATCH_OPTIONS.includes(form.batch_size) && <option value={form.batch_size}>{form.batch_size}</option>}
                 {BATCH_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
             </label>
             <label className="training-ws-field">
-              <span>Image size</span>
+              <span>Image size<FieldHelp text="训练时图片统一缩放到的边长（px）。越大对小目标越有利，但更慢、更占显存。可选 256~1024；默认 640。" /></span>
               <select value={String(form.img_size)} onChange={(event) => setForm((prev) => ({ ...prev, img_size: Number(event.target.value) }))}>
                 {!IMG_SIZE_OPTIONS.includes(form.img_size) && <option value={form.img_size}>{form.img_size}px</option>}
                 {IMG_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n}px</option>)}
@@ -224,27 +225,27 @@ export function TrainingConfigPanel({
           {advancedOpen && (
             <div className="training-ws-advanced-grid">
               <label className="training-ws-field">
-                <span>Val ratio（元数据）</span>
+                <span>Val ratio（元数据）<FieldHelp text="记录在本训练任务元数据中的验证集比例：范围 0~0.9，步进 0.05，默认 0.2。实际使用的 train/val/test 切分来自数据集已持久化的 split，本项不会重新切分数据；如需更改切分，请用数据集页的「自动切分」（按 0.8 / 0.2 / 0 执行）。" /></span>
                 <input type="number" step={0.05} min={0} max={0.9} value={form.val_ratio} onChange={(event) => setForm((prev) => ({ ...prev, val_ratio: Number(event.target.value) }))} />
               </label>
               <label className="training-ws-field">
-                <span>Seed</span>
+                <span>Seed<FieldHelp text="随机种子。固定后，数据顺序和初始化等随机过程可复现，两次训练结果可直接对比。默认 42。" /></span>
                 <input type="number" value={form.seed} onChange={(event) => setForm((prev) => ({ ...prev, seed: Number(event.target.value) }))} />
               </label>
               <label className="training-ws-field">
-                <span>学习率 lr0</span>
+                <span>学习率 lr0<FieldHelp text="初始学习率。留空即用优化器默认值。过大容易震荡、不收敛；过小收敛慢。填写需大于 0。" /></span>
                 <input value={form.lr0} placeholder="留空 = 默认" onChange={(event) => setForm((prev) => ({ ...prev, lr0: event.target.value }))} />
               </label>
               <label className="training-ws-field">
-                <span>Optimizer</span>
+                <span>Optimizer<FieldHelp text="优化器。可填 auto（默认，由 Ultralytics 自动选择）、SGD、AdamW 等 Ultralytics 支持的名称。" /></span>
                 <input value={form.optimizer} placeholder="auto / AdamW / SGD" onChange={(event) => setForm((prev) => ({ ...prev, optimizer: event.target.value }))} />
               </label>
               <label className="training-ws-field">
-                <span>Patience</span>
+                <span>Patience<FieldHelp text="早停耐心轮数：验证指标连续多少轮没有改善就提前结束训练，用于防过拟合、省时间。留空即用预设值：快速 12 / 均衡 20 / 高精度 30。" /></span>
                 <input value={form.patience} placeholder={String(PRESETS.balanced.patience)} onChange={(event) => setForm((prev) => ({ ...prev, patience: event.target.value }))} />
               </label>
               <label className="training-ws-field">
-                <span>Workers</span>
+                <span>Workers<FieldHelp text="数据加载进程数。调大减少训练等数据的时间，过大会抢占本机资源；0 表示在主进程加载。默认 2，范围 0~128。" /></span>
                 <input type="number" min={0} value={form.workers} onChange={(event) => setForm((prev) => ({ ...prev, workers: Number(event.target.value) }))} />
               </label>
             </div>

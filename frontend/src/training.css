@@ -509,6 +509,57 @@
   grid-column: 1 / -1;
 }
 
+/* 2026-11-05：训练配置字段「?」帮助气泡（点击图标切换，Esc 或点击外部关闭） */
+.training-field-help {
+  position: relative;
+  display: inline-flex;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.training-field-help-button {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.training-field-help-button:hover,
+.training-field-help-button[aria-expanded="true"] {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.training-field-help-bubble {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  width: max-content;
+  max-width: 280px;
+  padding: 9px 11px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: 0 6px 20px rgb(23 32 51 / 12%);
+  color: var(--text-dark);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.55;
+  text-align: left;
+  white-space: normal;
+}
+
 .training-config-radio-group {
   gap: 10px;
 }
