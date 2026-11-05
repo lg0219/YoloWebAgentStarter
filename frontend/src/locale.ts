@@ -30,6 +30,9 @@ export const localeText = {
     currentDataset: "当前数据集：",
     sidebarNoteTitle: "本地 YOLO 工作台",
     sidebarNoteBody: "数据和模型仅保存在此设备。",
+    // 2026-11-05：侧边栏底部帮助入口（指向 public/help/frontend-help.html 与 /ywa-api/docs）
+    helpLink: "使用帮助",
+    apiDocsLink: "API 文档",
   },
   en: {
     datasets: "Datasets",
@@ -49,5 +52,8 @@ export const localeText = {
     currentDataset: "Current dataset: ",
     sidebarNoteTitle: "Local YOLO workspace",
     sidebarNoteBody: "Data and models stay on this device.",
+    // 2026-11-05: sidebar bottom help links (public/help/frontend-help.html and /ywa-api/docs)
+    helpLink: "Help",
+    apiDocsLink: "API docs",
   },
 } as const;
