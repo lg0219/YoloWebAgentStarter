@@ -145,6 +145,11 @@ export interface SamSettings {
   model_configured: boolean;
 }
 
+/** （lg0219）标注画布偏好：线宽以屏幕像素保存，缩放补偿由前端负责。 */
+export interface AnnotationSettings {
+  line_width: number;
+}
+
 /** LLM settings persisted in the local data directory; GET never returns api_key. */
 export type LLMAuthScheme = "bearer" | "header" | "raw_authorization";
 
