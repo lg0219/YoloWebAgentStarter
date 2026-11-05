@@ -509,10 +509,23 @@
   grid-column: 1 / -1;
 }
 
-/* 2026-11-05：训练配置字段「?」帮助气泡（点击图标切换，Esc 或点击外部关闭） */
+/* 2026-11-05：训练配置字段「?」帮助气泡（点击图标切换，Esc 或点击外部关闭）
+   2026-11-05 二次修正：气泡左对齐（左边缘与「?」对齐），避免居中时向左展开被遮挡；
+   「?」独立于 label，flex 布局下不拉伸，是行内唯一特殊交互点。 */
+.training-ws-field-label {
+  display: flex;
+  align-items: center;
+  min-height: 18px;
+}
+
+.training-ws-field-label label {
+  cursor: default;
+}
+
 .training-field-help {
   position: relative;
   display: inline-flex;
+  flex: none;
   margin-left: 6px;
   vertical-align: middle;
 }
@@ -542,8 +555,7 @@
 .training-field-help-bubble {
   position: absolute;
   top: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
   z-index: 40;
   width: max-content;
   max-width: 280px;
