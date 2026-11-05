@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Konva from "konva";
 import { Image as KonvaImage, Layer, Line, Rect, Stage, Transformer } from "react-konva";
-import type { Annotation, BBox, ClassLabel, ImageItem, OBB, SamCapabilities, TaskType } from "../types";
+import type { Annotation, AnnotationSettings, BBox, ClassLabel, ImageItem, OBB, SamCapabilities, TaskType } from "../types";
+import { api } from "../api/client";
 import { clamp, clampBBoxToImage, clampOBBToImage, MIN_SHAPE_SIZE, normalizeAngle, normalizeBBox, toOriginalPoint } from "../utils/geometry";
 
 export type AnnotationDraft = {
@@ -52,6 +53,23 @@ export function AnnotationCanvas({ image, classes, annotations, activeClassId, s
   const [displaySize, setDisplaySize] = useState({ width: MAX_WIDTH, height: MAX_HEIGHT });
   // （lg0219）zoom 只作用于显示层：Stage 的 scale 与 position，不影响任何归一化坐标的计算口径。
   const [zoom, setZoom] = useState(1);
+  // （lg0219）标注线宽（屏幕像素），挂载时读取，保存后立即刷新。
+  const [lineWidth, setLineWidth] = useState(2);
+  const effectiveLineWidth = lineWidth / zoom;
+  const effectiveSelectedLineWidth = Math.max(effectiveLineWidth + 0.5, 1);
+
+  useEffect(() => {
+    const load = () => {
+      api.getAnnotationSettings()
+        .then((s: AnnotationSettings) => setLineWidth(s.line_width))
+        .catch(() => {/* 降级到默认 2 px，不阻断标注 */});
+    };
+    load();
+    window.addEventListener("annotation-settings-changed", load);
+    return () => {
+      window.removeEventListener("annotation-settings-changed", load);
+    };
+  }, []);
   const stageRef = useRef<Konva.Stage>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
   const obbRefs = useRef<Record<string, Konva.Rect | null>>({});
@@ -270,10 +288,10 @@ export function AnnotationCanvas({ image, classes, annotations, activeClassId, s
           >
             <Layer>
               <KonvaImage image={imageElement} width={displaySize.width} height={displaySize.height} listening={false} />
-              {annotations.map((annotation) => annotation.type === "obb" && annotation.obb ? <EditableObb key={annotation.id} annotation={annotation} stageObb={toStageObb(annotation.obb)} selected={annotation.id === effectiveSelectedAnnotationId} setNodeRef={(node) => { obbRefs.current[annotation.id] = node; }} onSelect={() => { setSelectedObbId(annotation.id); setSelectedBboxId(undefined); onSelectAnnotation?.(annotation.id); }} onChange={(updated) => replaceObb(annotation.id, updated)} /> : annotation.type === "bbox" && annotation.bbox ? <EditableBbox key={annotation.id} annotation={annotation} scale={scale} selected={annotation.id === effectiveSelectedAnnotationId} setNodeRef={(node) => { bboxRefs.current[annotation.id] = node; }} onSelect={() => { setSelectedBboxId(annotation.id); setSelectedObbId(undefined); onSelectAnnotation?.(annotation.id); }} onChange={(updated) => replaceBbox(annotation.id, updated)} /> : <AnnotationShape key={annotation.id} annotation={annotation} scale={scale} onSelect={() => onSelectAnnotation?.(annotation.id)} />)}
-              {dragStart && dragEnd && tool !== "obb" && <Rect {...displayBox(normalizeBBox(dragStart, dragEnd))} stroke="#f97316" dash={[6, 4]} />}
-              {draftObb && <Rect x={draftObb.x + draftObb.width / 2} y={draftObb.y + draftObb.height / 2} width={draftObb.width} height={draftObb.height} offsetX={draftObb.width / 2} offsetY={draftObb.height / 2} rotation={angle} stroke="#f97316" dash={[6, 4]} />}
-              {polygonPoints.length > 0 && <Line points={polygonPoints.flat()} stroke="#f97316" strokeWidth={2} closed={false} dash={[6, 4]} />}
+              {annotations.map((annotation) => annotation.type === "obb" && annotation.obb ? <EditableObb key={annotation.id} annotation={annotation} stageObb={toStageObb(annotation.obb)} selected={annotation.id === effectiveSelectedAnnotationId} lineWidth={effectiveLineWidth} hitLineWidth={Math.max(effectiveLineWidth * 2, 6)} setNodeRef={(node) => { obbRefs.current[annotation.id] = node; }} onSelect={() => { setSelectedObbId(annotation.id); setSelectedBboxId(undefined); onSelectAnnotation?.(annotation.id); }} onChange={(updated) => replaceObb(annotation.id, updated)} /> : annotation.type === "bbox" && annotation.bbox ? <EditableBbox key={annotation.id} annotation={annotation} scale={scale} selected={annotation.id === effectiveSelectedAnnotationId} lineWidth={effectiveLineWidth} setNodeRef={(node) => { bboxRefs.current[annotation.id] = node; }} onSelect={() => { setSelectedBboxId(annotation.id); setSelectedObbId(undefined); onSelectAnnotation?.(annotation.id); }} onChange={(updated) => replaceBbox(annotation.id, updated)} /> : <AnnotationShape key={annotation.id} annotation={annotation} scale={scale} onSelect={() => onSelectAnnotation?.(annotation.id)} />)}
+              {dragStart && dragEnd && tool !== "obb" && <Rect {...displayBox(normalizeBBox(dragStart, dragEnd))} stroke="#f97316" strokeWidth={effectiveLineWidth} dash={[6, 4]} />}
+              {draftObb && <Rect x={draftObb.x + draftObb.width / 2} y={draftObb.y + draftObb.height / 2} width={draftObb.width} height={draftObb.height} offsetX={draftObb.width / 2} offsetY={draftObb.height / 2} rotation={angle} stroke="#f97316" strokeWidth={effectiveLineWidth} dash={[6, 4]} />}
+              {polygonPoints.length > 0 && <Line points={polygonPoints.flat()} stroke="#f97316" strokeWidth={effectiveLineWidth} closed={false} dash={[6, 4]} />}
               <Transformer ref={transformerRef} rotateEnabled={Boolean(selectedObb)} flipEnabled={false} enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right"]} rotateAnchorOffset={28} boundBoxFunc={(previous, next) => next.width < MIN_SHAPE_SIZE * scale.x || next.height < MIN_SHAPE_SIZE * scale.y ? previous : next} />
             </Layer>
           </Stage>
@@ -290,15 +308,15 @@ export function AnnotationCanvas({ image, classes, annotations, activeClassId, s
   );
 }
 
-function EditableObb({ annotation, stageObb, selected, setNodeRef, onSelect, onChange }: { annotation: Annotation; stageObb: OBB; selected: boolean; setNodeRef: (node: Konva.Rect | null) => void; onSelect: () => void; onChange: (obb: OBB) => void }) {
-  return <Rect ref={setNodeRef} x={stageObb.cx} y={stageObb.cy} width={stageObb.width} height={stageObb.height} offsetX={stageObb.width / 2} offsetY={stageObb.height / 2} rotation={stageObb.angle} stroke={annotation.color} strokeWidth={selected ? 3 : 2} fill={selected ? `${annotation.color}22` : "transparent"} draggable onMouseDown={(event) => { event.cancelBubble = true; onSelect(); }} onClick={onSelect} onTap={onSelect} onDragEnd={(event) => onChange({ ...stageObb, cx: event.target.x(), cy: event.target.y() })} onTransformEnd={(event) => { const node = event.target; const scaleX = node.scaleX(); const scaleY = node.scaleY(); node.scaleX(1); node.scaleY(1); onChange({ cx: node.x(), cy: node.y(), width: Math.abs(node.width() * scaleX), height: Math.abs(node.height() * scaleY), angle: node.rotation() }); }} />;
+function EditableObb({ annotation, stageObb, selected, lineWidth, hitLineWidth, setNodeRef, onSelect, onChange }: { annotation: Annotation; stageObb: OBB; selected: boolean; lineWidth: number; hitLineWidth: number; setNodeRef: (node: Konva.Rect | null) => void; onSelect: () => void; onChange: (obb: OBB) => void }) {
+  return <Rect ref={setNodeRef} x={stageObb.cx} y={stageObb.cy} width={stageObb.width} height={stageObb.height} offsetX={stageObb.width / 2} offsetY={stageObb.height / 2} rotation={stageObb.angle} stroke={annotation.color} strokeWidth={selected ? lineWidth + 0.5 : lineWidth} hitStrokeWidth={hitLineWidth} fill={selected ? `${annotation.color}22` : "transparent"} draggable onMouseDown={(event) => { event.cancelBubble = true; onSelect(); }} onClick={onSelect} onTap={onSelect} onDragEnd={(event) => onChange({ ...stageObb, cx: event.target.x(), cy: event.target.y() })} onTransformEnd={(event) => { const node = event.target; const scaleX = node.scaleX(); const scaleY = node.scaleY(); node.scaleX(1); node.scaleY(1); onChange({ cx: node.x(), cy: node.y(), width: Math.abs(node.width() * scaleX), height: Math.abs(node.height() * scaleY), angle: node.rotation() }); }} />;
 }
 
-function EditableBbox({ annotation, scale, selected, setNodeRef, onSelect, onChange }: { annotation: Annotation; scale: { x: number; y: number }; selected: boolean; setNodeRef: (node: Konva.Rect | null) => void; onSelect: () => void; onChange: (bbox: BBox) => void }) {
+function EditableBbox({ annotation, scale, selected, lineWidth, setNodeRef, onSelect, onChange }: { annotation: Annotation; scale: { x: number; y: number }; selected: boolean; lineWidth: number; setNodeRef: (node: Konva.Rect | null) => void; onSelect: () => void; onChange: (bbox: BBox) => void }) {
   const bbox = annotation.bbox;
   if (!bbox) return null;
   const stageBox = { x: bbox.x * scale.x, y: bbox.y * scale.y, width: bbox.width * scale.x, height: bbox.height * scale.y };
-  return <Rect ref={setNodeRef} {...stageBox} stroke={annotation.color} strokeWidth={selected ? 3 : 2} fill={selected ? `${annotation.color}22` : "transparent"} draggable onMouseDown={(event) => { event.cancelBubble = true; onSelect(); }} onClick={onSelect} onTap={onSelect} onDragEnd={(event) => onChange({ ...stageBox, x: event.target.x(), y: event.target.y() })} onTransformEnd={(event) => { const node = event.target; const scaleX = node.scaleX(); const scaleY = node.scaleY(); node.scaleX(1); node.scaleY(1); onChange({ x: node.x(), y: node.y(), width: Math.abs(node.width() * scaleX), height: Math.abs(node.height() * scaleY) }); }} />;
+  return <Rect ref={setNodeRef} {...stageBox} stroke={annotation.color} strokeWidth={selected ? lineWidth + 0.5 : lineWidth} fill={selected ? `${annotation.color}22` : "transparent"} draggable onMouseDown={(event) => { event.cancelBubble = true; onSelect(); }} onClick={onSelect} onTap={onSelect} onDragEnd={(event) => onChange({ ...stageBox, x: event.target.x(), y: event.target.y() })} onTransformEnd={(event) => { const node = event.target; const scaleX = node.scaleX(); const scaleY = node.scaleY(); node.scaleX(1); node.scaleY(1); onChange({ x: node.x(), y: node.y(), width: Math.abs(node.width() * scaleX), height: Math.abs(node.height() * scaleY) }); }} />;
 }
 
 function displayBox(box: BBox) {
@@ -311,10 +329,10 @@ function toDraft(annotation: Annotation): AnnotationDraft {
 
 function AnnotationShape({ annotation, scale, onSelect }: { annotation: Annotation; scale: { x: number; y: number }; onSelect: () => void }) {
   if (annotation.type === "bbox" && annotation.bbox) {
-    return <Rect x={annotation.bbox.x * scale.x} y={annotation.bbox.y * scale.y} width={annotation.bbox.width * scale.x} height={annotation.bbox.height * scale.y} stroke={annotation.color} strokeWidth={2} />;
+    return <Rect x={annotation.bbox.x * scale.x} y={annotation.bbox.y * scale.y} width={annotation.bbox.width * scale.x} height={annotation.bbox.height * scale.y} stroke={annotation.color} strokeWidth={effectiveLineWidth} />;
   }
   if (annotation.polygon) {
-    return <Line points={annotation.polygon.flatMap(([x, y]) => [x * scale.x, y * scale.y])} closed stroke={annotation.color} fill={`${annotation.color}33`} strokeWidth={2} onMouseDown={(event) => { event.cancelBubble = true; onSelect(); }} onClick={onSelect} onTap={onSelect} />;
+    return <Line points={annotation.polygon.flatMap(([x, y]) => [x * scale.x, y * scale.y])} closed stroke={annotation.color} fill={`${annotation.color}33`} strokeWidth={effectiveLineWidth} onMouseDown={(event) => { event.cancelBubble = true; onSelect(); }} onClick={onSelect} onTap={onSelect} />;
   }
   return null;
 }

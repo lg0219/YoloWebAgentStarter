@@ -2,9 +2,15 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "re
 import { api } from "../api/client";
 import type { AppLocale } from "../locale";
 import { saveLocale } from "../locale";
-import type { LLMAuthScheme, LLMSettings, SamSettings, TrainingDevice } from "../types";
+import type {
+  AnnotationSettings,
+  LLMAuthScheme,
+  LLMSettings,
+  SamSettings,
+  TrainingDevice,
+} from "../types";
 
-export type SettingsTab = "llm" | "sam" | "language";
+export type SettingsTab = "llm" | "sam" | "annotation" | "language";
 
 type LlmFormState = LLMSettings & { api_key: string };
 
@@ -66,6 +72,15 @@ const copy = {
     fallbackReady: "使用框形建议",
     disabledStatus: "已关闭",
     samFooter: "SAM 只对 segment 数据集开放。",
+    annotationNav: "标注画布",
+    annotationNavDescription: "标注线宽与缩放补偿",
+    annotationTitle: "标注画布设置",
+    annotationSubtitle: "调整标注框线的粗细。数值以屏幕像素为准，放大图片时会自动补偿，保证线宽不随缩放变粗或变细。",
+    lineWidth: "标注线宽",
+    lineWidthHint: "推荐 1.5～2.5 px；过细难看清，过粗会遮挡小目标。",
+    saveAnnotation: "保存标注设置",
+    savedAnnotation: "标注设置已保存",
+    annotationFooter: "改变线宽后，新画的框线立即使用新值；已有框线不变。",
     languageTitle: "语言设置",
     languageSubtitle: "切换工作台界面语言。偏好只保存在本机浏览器中。",
     displayLanguage: "显示语言",
@@ -145,6 +160,15 @@ const copy = {
     fallbackReady: "Box proposals",
     disabledStatus: "Disabled",
     samFooter: "SAM assist is available for segment datasets only.",
+    annotationNav: "Annotation canvas",
+    annotationNavDescription: "Line width and zoom compensation",
+    annotationTitle: "Annotation canvas settings",
+    annotationSubtitle: "Adjust the thickness of annotation boxes. Values are in screen pixels; zooming in automatically compensates so lines stay the same visual thickness.",
+    lineWidth: "Annotation line width",
+    lineWidthHint: "1.5–2.5 px works well. Too thin is hard to see; too thick hides small objects.",
+    saveAnnotation: "Save annotation settings",
+    savedAnnotation: "Annotation settings saved",
+    annotationFooter: "New boxes use the new width immediately; existing boxes are unchanged.",
     languageTitle: "Language settings",
     languageSubtitle: "Switch the workspace language. The preference is stored in this browser only.",
     displayLanguage: "Display language",
@@ -255,6 +279,13 @@ export function SettingsView({
             onClick={() => onTabChange("sam")}
           />
           <SettingsNavigationItem
+            active={tab === "annotation"}
+            icon={<AnnotationIcon />}
+            title={text.annotationNav}
+            description={text.annotationNavDescription}
+            onClick={() => onTabChange("annotation")}
+          />
+          <SettingsNavigationItem
             active={tab === "language"}
             icon={<LanguageIcon />}
             title={text.languageNav}
@@ -267,6 +298,8 @@ export function SettingsView({
             <LlmSettingsPanel locale={locale} text={text} />
           ) : tab === "sam" ? (
             <SamSettingsPanel locale={locale} text={text} onSamSettingsChange={onSamSettingsChange} />
+          ) : tab === "annotation" ? (
+            <AnnotationSettingsPanel locale={locale} text={text} />
           ) : (
             <LanguageSettingsPanel locale={locale} text={text} onLocaleChange={onLocaleChange} />
           )}
@@ -674,6 +707,76 @@ function SamSettingsPanel({ locale, text, onSamSettingsChange }: { locale: AppLo
   );
 }
 
+function AnnotationSettingsPanel({ locale, text }: { locale: AppLocale; text: SettingsText }) {
+  const [settings, setSettings] = useState<AnnotationSettings>();
+  const [busy, setBusy] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api.getAnnotationSettings()
+      .then(setSettings)
+      .catch((reason) => setError(reason instanceof Error ? reason.message : text.error))
+      .finally(() => setBusy(false));
+  }, []);
+
+  // 保存后立即通知画布刷新（AnnotationCanvas 监听同名事件），下次打开设置页也能读到新值。
+  const save = async () => {
+    if (!settings) return;
+    setSaving(true);
+    setError("");
+    try {
+      setSettings(await api.updateAnnotationSettings({ line_width: settings.line_width }));
+      window.dispatchEvent(new Event("annotation-settings-changed"));
+      setMessage(text.savedAnnotation);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : text.error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (busy) return <section className="panel settings-card"><p className="muted settings-loading">{text.loading}</p></section>;
+  if (!settings) return <section className="panel settings-card"><div className="validation invalid">{error || text.error}</div></section>;
+  return (
+    <section className="panel settings-card">
+      <header className="settings-card-head">
+        <div className="settings-card-icon"><AnnotationIcon /></div>
+        <div>
+          <h2>{text.annotationTitle}</h2>
+          <p>{text.annotationSubtitle}</p>
+        </div>
+        <span className="settings-status ready">{text.savedAnnotation}</span>
+      </header>
+      {error ? <div className="validation invalid"><span>{error}</span></div> : null}
+      {message ? <div className="validation valid"><span>{message}</span></div> : null}
+      <div className="settings-form-grid">
+        <label className="settings-toggle">
+          <span>
+            <strong>{text.lineWidth}</strong>
+            <small>{text.lineWidthHint}</small>
+          </span>
+          <input
+            type="range"
+            min={0.5}
+            max={3}
+            step={0.1}
+            value={settings.line_width}
+            style={{ width: "180px" }}
+            onChange={(event) => setSettings({ ...settings, line_width: Number(event.target.value) })}
+          />
+          <span style={{ fontWeight: 600, minWidth: "3ch", textAlign: "right" }}>{settings.line_width.toFixed(1)} px</span>
+        </label>
+      </div>
+      <footer className="settings-footer">
+        <span>{text.annotationFooter}</span>
+        <button className="button primary" disabled={saving} onClick={() => void save()}>{saving ? "…" : text.saveAnnotation}</button>
+      </footer>
+    </section>
+  );
+}
+
 function LanguageSettingsPanel({
   locale,
   text,
@@ -706,6 +809,15 @@ function LanguageSettingsPanel({
       </div>
       <footer className="settings-footer"><span>{text.applied}</span></footer>
     </section>
+  );
+}
+
+function AnnotationIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="5" y="5" width="14" height="14" rx="3" stroke="currentColor" strokeWidth="2" />
+      <path d="M9 9L15 15M9 15L15 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
   );
 }
 
