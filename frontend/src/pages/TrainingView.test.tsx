@@ -41,6 +41,35 @@ let container: HTMLDivElement | undefined;
 beforeEach(() => { container = document.createElement("div"); document.body.append(container); root = createRoot(container); });
 afterEach(() => { act(() => root?.unmount()); container?.remove(); });
 
+describe("TrainingView field help", () => {
+  // 2026-11-05 hunter 验收反馈：帮助气泡只能由「?」触发，不能整行可点
+  it("only the ? icon toggles field help; the label row is not a click target", async () => {
+    await act(async () => { root?.render(<TrainingView datasets={[detect]} dataset={detect} onDatasetChange={vi.fn()} />); });
+    const labels = Array.from(container?.querySelectorAll<HTMLLabelElement>(".training-ws-field-label label") ?? []);
+    const epochsLabel = labels.find((item) => item.textContent === "Epochs");
+    expect(epochsLabel).toBeDefined();
+
+    // 结构断言：字段容器不再是 <label>（整行可点），? 与 label 是兄弟节点
+    const field = epochsLabel?.closest(".training-ws-field");
+    expect(field?.tagName).toBe("DIV");
+    const helpButton = field?.querySelector<HTMLButtonElement>(".training-field-help-button");
+    expect(helpButton).toBeDefined();
+
+    // 点 label 文字：不弹气泡
+    await act(async () => { epochsLabel?.click(); });
+    expect(container?.querySelector(".training-field-help-bubble")).toBeNull();
+
+    // 点 ?：弹出气泡且内容属该字段
+    await act(async () => { helpButton?.click(); });
+    const bubble = container?.querySelector(".training-field-help-bubble");
+    expect(bubble?.textContent).toContain("所有图片");
+
+    // 再点一次：收起
+    await act(async () => { helpButton?.click(); });
+    expect(container?.querySelector(".training-field-help-bubble")).toBeNull();
+  });
+});
+
 describe("TrainingView dataset selection", () => {
   it("allows selecting the dataset used for a new training task", async () => {
     const onDatasetChange = vi.fn();

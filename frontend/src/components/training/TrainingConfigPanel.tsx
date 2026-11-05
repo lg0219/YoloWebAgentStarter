@@ -1,4 +1,4 @@
-import type { FormEvent } from "react";
+import { useId, type FormEvent } from "react";
 import type { Dataset, TaskType } from "../../types";
 import {
   BATCH_OPTIONS,
@@ -10,6 +10,7 @@ import {
   type TrainingFormState,
 } from "../../training/helpers";
 import { IconBox, IconChevron, IconGrid, IconScan, IconShapes, IconSpark } from "./icons";
+import { FieldHelp } from "./FieldHelp";
 
 interface Props {
   datasets: Dataset[];
@@ -55,6 +56,23 @@ export function TrainingConfigPanel({
   const modelChoices = modelChoicesFor(dataset.task_type);
   const modelInList = modelChoices.some((item) => item.value === form.model);
   const taskMeta = TASK_META[dataset.task_type];
+  // 2026-11-05：字段不再整行包 <label>（整行可点、焦点区过大），
+  // 改为显式 htmlFor/id 关联，? 帮助图标独立成行内唯一特殊交互点。
+  const fieldId = (name: string) => `training-field-${name}-${useId().replace(/:/g, "")}`;
+  const ids = {
+    experimentName: fieldId("experiment-name"),
+    model: fieldId("model"),
+    customModel: fieldId("custom-model"),
+    epochs: fieldId("epochs"),
+    batchSize: fieldId("batch-size"),
+    imgSize: fieldId("img-size"),
+    valRatio: fieldId("val-ratio"),
+    seed: fieldId("seed"),
+    lr0: fieldId("lr0"),
+    optimizer: fieldId("optimizer"),
+    patience: fieldId("patience"),
+    workers: fieldId("workers"),
+  };
 
   return (
     <section id="training-config-anchor" className="training-ws-card training-ws-config">
@@ -71,9 +89,10 @@ export function TrainingConfigPanel({
             <h3>数据集与任务</h3>
             <p>任务类型由数据集锁定；切换数据集会重置表单默认值。</p>
           </div>
-          <label className="training-ws-field training-ws-field-wide">
-            <span>训练数据集</span>
+          <div className="training-ws-field training-ws-field-wide">
+            <span className="training-ws-field-label"><label htmlFor={ids.experimentName}>训练数据集</label></span>
             <select
+              id={ids.experimentName}
               value={dataset.id}
               onChange={(event) => {
                 const next = datasets.find((item) => item.id === event.target.value);
@@ -86,7 +105,7 @@ export function TrainingConfigPanel({
                 </option>
               ))}
             </select>
-          </label>
+          </div>
           <div className="tcc-task-type-seg tcc-task-type-seg--wrap" role="group" aria-label="任务类型">
             {(["detect", "segment", "obb", "classify"] as const).map((kind) => {
               const { Icon } = TASK_META[kind];
@@ -161,13 +180,17 @@ export function TrainingConfigPanel({
             <h3>模型与基础参数</h3>
           </div>
           <div className="training-ws-form-grid training-ws-form-grid--base">
-            <label className="training-ws-field training-ws-field-wide">
-              <span>实验名称</span>
-              <input value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} required />
-            </label>
-            <label className="training-ws-field training-ws-field-wide">
-              <span>基础权重</span>
+            <div className="training-ws-field training-ws-field-wide">
+              <span className="training-ws-field-label"><label htmlFor={ids.experimentName}>实验名称</label></span>
+              <input id={ids.experimentName} value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} required />
+            </div>
+            <div className="training-ws-field training-ws-field-wide">
+              <span className="training-ws-field-label">
+                <label htmlFor={ids.model}>基础权重</label>
+                <FieldHelp text="训练的起点模型，相当于站在哪个已有模型的基础上继续练。小模型（n / s）练得快、精度上限低；大模型（m / l / x）更慢、更占显存，但精度上限高。默认 yolo11n.pt；第一次用哪个权重，程序就会自动联网下载哪个。" />
+              </span>
               <select
+                id={ids.model}
                 value={modelInList ? form.model : "__custom__"}
                 onChange={(event) => {
                   const value = event.target.value;
@@ -180,31 +203,40 @@ export function TrainingConfigPanel({
                 ))}
                 {!modelInList && <option value="__custom__">{form.model}</option>}
               </select>
-            </label>
+            </div>
             {!modelInList && (
-              <label className="training-ws-field training-ws-field-wide">
-                <span>自定义权重名</span>
-                <input value={form.model} onChange={(event) => setForm((prev) => ({ ...prev, model: event.target.value }))} />
-              </label>
+              <div className="training-ws-field training-ws-field-wide">
+                <span className="training-ws-field-label"><label htmlFor={ids.customModel}>自定义权重名</label></span>
+                <input id={ids.customModel} value={form.model} onChange={(event) => setForm((prev) => ({ ...prev, model: event.target.value }))} />
+              </div>
             )}
-            <label className="training-ws-field">
-              <span>Epochs</span>
-              <input type="number" min={1} value={form.epochs} onChange={(event) => setForm((prev) => ({ ...prev, epochs: Number(event.target.value) }))} />
-            </label>
-            <label className="training-ws-field">
-              <span>Batch size</span>
-              <select value={String(form.batch_size)} onChange={(event) => setForm((prev) => ({ ...prev, batch_size: Number(event.target.value) }))}>
+            <div className="training-ws-field">
+              <span className="training-ws-field-label">
+                <label htmlFor={ids.epochs}>Epochs</label>
+                <FieldHelp text="所有图片完完整整学几轮。学得越久记得越牢，但太久了会把训练图片死记硬背下来（过拟合），到新图片上反而变差。可选 1~10000 轮；预设：快速 30 / 均衡 50 / 高精度 100。" />
+              </span>
+              <input id={ids.epochs} type="number" min={1} value={form.epochs} onChange={(event) => setForm((prev) => ({ ...prev, epochs: Number(event.target.value) }))} />
+            </div>
+            <div className="training-ws-field">
+              <span className="training-ws-field-label">
+                <label htmlFor={ids.batchSize}>Batch size</label>
+                <FieldHelp text="一次同时看几张图，然后据此改一次模型。看得多，练得快但更吃显存；看得少，练得慢但更稳。显存不够的时候就把它调小。可选 1~64；预设：快速与均衡 16，高精度 8。" />
+              </span>
+              <select id={ids.batchSize} value={String(form.batch_size)} onChange={(event) => setForm((prev) => ({ ...prev, batch_size: Number(event.target.value) }))}>
                 {!BATCH_OPTIONS.includes(form.batch_size) && <option value={form.batch_size}>{form.batch_size}</option>}
                 {BATCH_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
-            </label>
-            <label className="training-ws-field">
-              <span>Image size</span>
-              <select value={String(form.img_size)} onChange={(event) => setForm((prev) => ({ ...prev, img_size: Number(event.target.value) }))}>
+            </div>
+            <div className="training-ws-field">
+              <span className="training-ws-field-label">
+                <label htmlFor={ids.imgSize}>Image size</label>
+                <FieldHelp text="把每张图缩放到多大再喂给模型，单位是边长像素。图越大，小目标越看得清，但更慢、更占显存。一般 640 就够；实在找不到小目标再往上调。可选 256~1024，默认 640。" />
+              </span>
+              <select id={ids.imgSize} value={String(form.img_size)} onChange={(event) => setForm((prev) => ({ ...prev, img_size: Number(event.target.value) }))}>
                 {!IMG_SIZE_OPTIONS.includes(form.img_size) && <option value={form.img_size}>{form.img_size}px</option>}
                 {IMG_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n}px</option>)}
               </select>
-            </label>
+            </div>
           </div>
           <p className="tcc-model-hint training-ws-field-wide" role="note">
             首次使用 {form.model} 时，Ultralytics 可能下载对应权重。请确认适用许可后再训练。
@@ -223,30 +255,48 @@ export function TrainingConfigPanel({
           </button>
           {advancedOpen && (
             <div className="training-ws-advanced-grid">
-              <label className="training-ws-field">
-                <span>Val ratio（元数据）</span>
-                <input type="number" step={0.05} min={0} max={0.9} value={form.val_ratio} onChange={(event) => setForm((prev) => ({ ...prev, val_ratio: Number(event.target.value) }))} />
-              </label>
-              <label className="training-ws-field">
-                <span>Seed</span>
-                <input type="number" value={form.seed} onChange={(event) => setForm((prev) => ({ ...prev, seed: Number(event.target.value) }))} />
-              </label>
-              <label className="training-ws-field">
-                <span>学习率 lr0</span>
-                <input value={form.lr0} placeholder="留空 = 默认" onChange={(event) => setForm((prev) => ({ ...prev, lr0: event.target.value }))} />
-              </label>
-              <label className="training-ws-field">
-                <span>Optimizer</span>
-                <input value={form.optimizer} placeholder="auto / AdamW / SGD" onChange={(event) => setForm((prev) => ({ ...prev, optimizer: event.target.value }))} />
-              </label>
-              <label className="training-ws-field">
-                <span>Patience</span>
-                <input value={form.patience} placeholder={String(PRESETS.balanced.patience)} onChange={(event) => setForm((prev) => ({ ...prev, patience: event.target.value }))} />
-              </label>
-              <label className="training-ws-field">
-                <span>Workers</span>
-                <input type="number" min={0} value={form.workers} onChange={(event) => setForm((prev) => ({ ...prev, workers: Number(event.target.value) }))} />
-              </label>
+              <div className="training-ws-field">
+                <span className="training-ws-field-label">
+                  <label htmlFor={ids.valRatio}>Val ratio（元数据）</label>
+                  <FieldHelp text="它不会真正改变你的训练 / 验证图片分组，只是把这个比例写进这次训练任务的档案里。真正决定用哪些图训练、哪些图验证的，是数据集里每张图已经分好的组；要改分组，去数据集页点「自动切分」。默认 0.2。" />
+                </span>
+                <input id={ids.valRatio} type="number" step={0.05} min={0} max={0.9} value={form.val_ratio} onChange={(event) => setForm((prev) => ({ ...prev, val_ratio: Number(event.target.value) }))} />
+              </div>
+              <div className="training-ws-field">
+                <span className="training-ws-field-label">
+                  <label htmlFor={ids.seed}>Seed</label>
+                  <FieldHelp text="训练过程里有很多看似随机的事：图片按什么顺序进场、模型一开始长什么样。这个数字就是这些随机事的剧本编号——填同一个数字，两次训练会走出完全一样的过程，结果可复现、可对比；换个数字，结果就会有细微差别。默认 42。" />
+                </span>
+                <input id={ids.seed} type="number" value={form.seed} onChange={(event) => setForm((prev) => ({ ...prev, seed: Number(event.target.value) }))} />
+              </div>
+              <div className="training-ws-field">
+                <span className="training-ws-field-label">
+                  <label htmlFor={ids.lr0}>学习率 lr0</label>
+                  <FieldHelp text="模型每改一次自己，改正的幅度。步子太大容易来回震荡、学不稳；太小又学得太慢。一般不用填，让程序自己定；填了必须大于 0。" />
+                </span>
+                <input id={ids.lr0} value={form.lr0} placeholder="留空 = 默认" onChange={(event) => setForm((prev) => ({ ...prev, lr0: event.target.value }))} />
+              </div>
+              <div className="training-ws-field">
+                <span className="training-ws-field-label">
+                  <label htmlFor={ids.optimizer}>Optimizer</label>
+                  <FieldHelp text="模型调整自己的方法。默认 auto，让程序按任务自己挑，不用管；要手动指定，就填 SGD 或 AdamW 这类程序认得的名字。" />
+                </span>
+                <input id={ids.optimizer} value={form.optimizer} placeholder="auto / AdamW / SGD" onChange={(event) => setForm((prev) => ({ ...prev, optimizer: event.target.value }))} />
+              </div>
+              <div className="training-ws-field">
+                <span className="training-ws-field-label">
+                  <label htmlFor={ids.patience}>Patience</label>
+                  <FieldHelp text="如果验证效果连续这么多轮都没有进步，就提前收工不练了——既不浪费时间，也防止把训练图片背死。留空按预设：快速 12 / 均衡 20 / 高精度 30。" />
+                </span>
+                <input id={ids.patience} value={form.patience} placeholder={String(PRESETS.balanced.patience)} onChange={(event) => setForm((prev) => ({ ...prev, patience: event.target.value }))} />
+              </div>
+              <div className="training-ws-field">
+                <span className="training-ws-field-label">
+                  <label htmlFor={ids.workers}>Workers</label>
+                  <FieldHelp text="训练时同时运行的进程数——这些进程在后台准备数据（读图、改尺寸、打包好喂给模型）。多开几个，模型就不用干等数据；但开太多会和其他程序抢 CPU。默认 2。" />
+                </span>
+                <input id={ids.workers} type="number" min={0} value={form.workers} onChange={(event) => setForm((prev) => ({ ...prev, workers: Number(event.target.value) }))} />
+              </div>
             </div>
           )}
         </div>
