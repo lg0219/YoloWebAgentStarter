@@ -13,7 +13,7 @@ import { ImportCenterModal } from "./components/ImportCenterModal";
 import { readLocale, saveLocale, type AppLocale } from "./locale";
 import type { Annotation, BBox, ClassLabel, Dataset, DatasetQualityReport, DuplicateReport, ImageItem, SamCapabilities, SamPrediction, SplitName, TaskType, ValidationReport } from "./types";
 
-type View = "workspace" | "annotation" | "training" | "models" | "agent" | "settings-llm" | "settings-sam" | "settings-language" | "logs";
+type View = "workspace" | "annotation" | "training" | "models" | "agent" | "settings-llm" | "settings-sam" | "settings-annotation" | "settings-language" | "logs";
 type CardReportKind = "validation" | "quality" | "duplicates";
 const ANNOTATION_IMAGE_PAGE_SIZE = 20;
 
@@ -158,7 +158,7 @@ export default function App() {
   const activeSection: StarterSection =
     view === "annotation"
       ? "workspace"
-      : view === "settings-llm" || view === "settings-sam" || view === "settings-language"
+      : view === "settings-llm" || view === "settings-sam" || view === "settings-annotation" || view === "settings-language"
         ? "settings"
         : view;
   const navigate = (section: StarterSection) => {
@@ -306,13 +306,13 @@ export default function App() {
           onFocusModelConsumed={() => setFocusModelId(undefined)}
           onAskAgent={(model) => { setAgentFocus({ ...(model.dataset_id ? { dataset: { id: model.dataset_id, name: datasets.find((d) => d.id === model.dataset_id)?.name ?? model.dataset_id } } : {}), model: { id: model.id, name: model.name } }); setView("agent"); }}
         />
-      ) : view === "settings-llm" || view === "settings-sam" || view === "settings-language" ? (
+      ) : view === "settings-llm" || view === "settings-sam" || view === "settings-annotation" || view === "settings-language" ? (
         <SettingsView
           tab={view === "settings-llm" ? "llm" : view === "settings-sam" ? "sam" : "language"}
           locale={locale}
           onLocaleChange={setLocale}
           onTabChange={(tab) =>
-            setView(tab === "llm" ? "settings-llm" : tab === "sam" ? "settings-sam" : "settings-language")
+            setView(tab === "llm" ? "settings-llm" : tab === "sam" ? "settings-sam" : tab === "annotation" ? "settings-annotation" : "settings-language")
           }
           onSamSettingsChange={() => {
             api.getSystemInfo().then((info) => setSamCapabilities(info.sam)).catch(() => undefined);

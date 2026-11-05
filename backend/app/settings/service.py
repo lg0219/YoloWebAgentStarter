@@ -14,6 +14,8 @@ from app.agent.llm_auth import (
 from app.core.config import Settings
 from app.core.errors import ValidationError
 from app.settings.schemas import (
+    AnnotationSettingsResponse,
+    AnnotationSettingsUpdate,
     LLMConnectionTestRequest,
     LLMConnectionTestResult,
     LLMSettingsInternal,
@@ -247,4 +249,18 @@ class SettingsService:
 
 
 # Backward-compatible name used across SAM routers/tests.
+    # （lg0219）标注线宽偏好：与 Sam 同款读写模式，存 settings.json 的 annotation 段。
+    def get_annotation_settings(self) -> AnnotationSettingsResponse:
+        raw = self._read()
+        return AnnotationSettingsResponse(line_width=float(raw.get("annotation", {}).get("line_width", 1.0)))
+
+    def update_annotation_settings(self, payload: AnnotationSettingsUpdate) -> AnnotationSettingsResponse:
+        data = self._read()
+        annotation = dict(data.get("annotation") or {})
+        annotation["line_width"] = payload.line_width
+        data["annotation"] = annotation
+        self._write(data)
+        return AnnotationSettingsResponse(line_width=payload.line_width)
+
+
 SamSettingsService = SettingsService

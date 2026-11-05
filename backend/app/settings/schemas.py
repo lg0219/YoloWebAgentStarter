@@ -26,6 +26,16 @@ class SamSettingsUpdate(BaseModel):
     fallback_mode: SamFallbackMode = "box"
 
 
+# （lg0219）标注画布偏好：线宽以「屏幕像素」口径保存（zoom 补偿由前端负责），
+# 持久化位置与 Sam/LLM 一致（settings.json，不入 SQLite）。
+class AnnotationSettingsResponse(BaseModel):
+    line_width: float
+
+
+class AnnotationSettingsUpdate(BaseModel):
+    line_width: float = Field(default=1.0, ge=0.5, le=3.0)
+
+
 # Adapted from upstream YoloWebAgent settings/schemas.py (Community subset).
 class LLMSettingsOut(BaseModel):
     enabled: bool = False

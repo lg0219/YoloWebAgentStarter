@@ -25,6 +25,7 @@ import type {
   SystemInfo,
   RuntimeLogResponse,
   VideoImportTask,
+  AnnotationSettings,
   TrainingDevice,
   ValidationReport,
 } from "../types";
@@ -61,6 +62,9 @@ export const api = {
   getSystemInfo: () => request<SystemInfo>("/api/system/info"),
   getSamSettings: () => request<SamSettings>("/api/settings/sam"),
   updateSamSettings: (payload: Omit<SamSettings, "model_configured">) => request<SamSettings>("/api/settings/sam", json(payload, "PUT")),
+  // （lg0219）标注线宽偏好：GET/PUT /api/settings/annotation，口径为屏幕像素。
+  getAnnotationSettings: () => request<AnnotationSettings>("/api/settings/annotation"),
+  updateAnnotationSettings: (payload: { line_width: number }) => request<AnnotationSettings>("/api/settings/annotation", json(payload, "PUT")),
   getLlmSettings: () => request<LLMSettings>("/api/settings/llm"),
   updateLlmSettings: (payload: Omit<LLMSettings, "api_key_configured"> & { api_key?: string }) =>
     request<LLMSettings>("/api/settings/llm", json(payload, "PUT")),
