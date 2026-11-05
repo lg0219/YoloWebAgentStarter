@@ -11,6 +11,7 @@ from app.core.ids import new_id
 from app.core.models import ImageItem
 from app.core.schemas import AutoSplitRequest, BulkImageSplitUpdate, ScanImagesResponse, SplitName, SplitOperationResponse
 from app.core.storage import SUPPORTED_IMAGE_SUFFIXES, Storage
+from app.dataset.dcm import convert_dicom_to_png, find_sidecar_json, is_dicom_name
 from app.dataset.service import get_dataset, refresh_dataset_counts
 
 
@@ -34,7 +35,13 @@ def _stage_image(
     original_name: str,
     content: bytes,
     split: SplitName,
+    sidecar: bytes | None = None,
 ) -> ImageItem:
+    # （lg0219）DICOM 在写入存储前先转成 8bit PNG，后续链路只认识普通图片。
+    if is_dicom_name(original_name):
+        converted = convert_dicom_to_png(content, sidecar)
+        content = converted.png
+        original_name = f"{Path(original_name).stem}.png"
     image_id = new_id("img")
     storage_name = storage.safe_storage_name(original_name, image_id)
     width, height = storage.write_image(dataset_id, storage_name, content)
@@ -58,12 +65,14 @@ def add_uploaded_images(
     dataset_id: str,
     uploads: list[tuple[str, bytes]],
     split: SplitName,
+    sidecars: dict[str, bytes] | None = None,
 ) -> list[ImageItem]:
     get_dataset(session, dataset_id)
     staged: list[ImageItem] = []
     try:
         for file_name, content in uploads:
-            staged.append(_stage_image(session, storage, dataset_id, file_name, content, split))
+            sidecar = (sidecars or {}).get(file_name)
+            staged.append(_stage_image(session, storage, dataset_id, file_name, content, split, sidecar))
         session.flush()
         refresh_dataset_counts(session, dataset_id)
         session.commit()
@@ -92,19 +101,25 @@ def scan_images(
     skipped = 0
     invalid = 0
     uploads: list[tuple[str, bytes]] = []
+    sidecars: dict[str, bytes] = {}
     for path in paths:
-        if path.suffix.lower() not in SUPPORTED_IMAGE_SUFFIXES:
+        # （lg0219）.dcm / .dicom 也要纳入扫描，导入时统一转 PNG。
+        if path.suffix.lower() not in SUPPORTED_IMAGE_SUFFIXES and not is_dicom_name(path.name):
             skipped += 1
             continue
         try:
             resolved = storage.resolve_import_file(path)
             uploads.append((path.name, resolved.read_bytes()))
+            if is_dicom_name(path.name):
+                sidecar_path = find_sidecar_json(resolved)
+                if sidecar_path is not None:
+                    sidecars[path.name] = sidecar_path.read_bytes()
         except (OSError, ValidationError):
             invalid += 1
     imported = 0
     for file_name, content in uploads:
         try:
-            add_uploaded_images(session, storage, dataset_id, [(file_name, content)], split)
+            add_uploaded_images(session, storage, dataset_id, [(file_name, content)], split, sidecars)
             imported += 1
         except ValidationError:
             invalid += 1
