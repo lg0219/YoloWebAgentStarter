@@ -46,6 +46,11 @@ h1, h2, p { margin: 0; }
 .starter-sidebar-note strong { color: #3157d5; font-size: 13px; }
 .starter-sidebar-note p { color: #65728d; font-size: 12px; line-height: 1.45; }
 .starter-sidebar-version { color: #a1a9b9; font-size: 10px; font-weight: 650; text-align: center; }
+/* 2026-11-05：侧边栏底部帮助入口（使用帮助 / API 文档） */
+.starter-sidebar-links { display: grid; gap: 3px; padding: 0 4px; }
+.starter-sidebar-link { display: inline-flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 12px; border-radius: 8px; color: #6d7890; font-size: 13px; font-weight: 600; text-decoration: none; }
+.starter-sidebar-link:hover, .starter-sidebar-link:focus-visible { color: #3157d5; background: #eef2ff; }
+.starter-sidebar-link svg { width: 17px; height: 17px; flex: none; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
 .starter-main { min-width: 0; overflow: hidden; }
 
 /* 数据集总览：按 YoloWebAgent 的“列表页 -> 数据集详情”层级重新组织。 */
@@ -417,7 +422,7 @@ input:focus, select:focus, textarea:focus { border-color: #6682e5; box-shadow: 0
   .agent-title-editor { flex-wrap: wrap; }
   .starter-layout:has(.agent-layout) { grid-template-columns: 1fr; }
   .starter-layout:has(.agent-layout) > .starter-sidebar { position: static; height: auto; display: block; padding: 8px; border-right: 0; border-bottom: 1px solid #e7eaf0; }
-  .starter-layout:has(.agent-layout) :is(.starter-workspace-brand, .starter-sidebar-note, .starter-sidebar-version, .starter-menu-group-label) { display: none; }
+  .starter-layout:has(.agent-layout) :is(.starter-workspace-brand, .starter-sidebar-note, .starter-sidebar-links, .starter-sidebar-version, .starter-menu-group-label) { display: none; }
   .starter-layout:has(.agent-layout) :is(.starter-menu, .starter-menu-group) { display: flex; gap: 4px; }
   .starter-layout:has(.agent-layout) .starter-menu { overflow-x: auto; }
   .starter-layout:has(.agent-layout) .starter-menu-item { flex-shrink: 0; gap: 5px; padding: 0 9px; font-size: 12px; }

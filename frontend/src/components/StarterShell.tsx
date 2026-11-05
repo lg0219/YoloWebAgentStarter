@@ -63,6 +63,16 @@ export function StarterShell({ active, datasetName, onNavigate, locale = "zh", c
             <strong>{text.sidebarNoteTitle}</strong>
             <p>{text.sidebarNoteBody}</p>
           </div>
+          {/* 2026-11-05：帮助入口。BASE_URL 跟随 vite base(/ywa/)，保证 dev 与 build 产物路径一致；
+              /ywa-api/docs 是 nginx 到后端 FastAPI 的反代地址，服务根路径固定不变。 */}
+          <div className="starter-sidebar-links">
+            <a className="starter-sidebar-link" href={`${import.meta.env.BASE_URL}help/frontend-help.html`} target="_blank" rel="noreferrer">
+              <HelpIcon />{text.helpLink}
+            </a>
+            <a className="starter-sidebar-link" href="/ywa-api/docs" target="_blank" rel="noreferrer">
+              <ApiIcon />{text.apiDocsLink}
+            </a>
+          </div>
           <div className="starter-sidebar-version">YoloWebAgent Starter · v0.1</div>
         </aside>
         <div className="starter-main">{children}</div>
@@ -84,3 +94,5 @@ function LocalIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path 
 function SettingsIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" /><path d="m19 13.5 1.2 1-.2 1.7-1.5 1-1.7-.6-1 1.1.1 1.8-1.5.8-1.4-1.1h-1.5L10 20.3l-1.6-.8.1-1.8-1-1.1-1.7.6-1.5-1 .2-1.7 1.2-1v-1.5l-1.2-1 .2-1.7 1.5-1 1.7.6 1-1.1-.1-1.8L10 5l1.4 1.1h1.5L14.3 5l1.6.8-.1 1.8 1 1.1 1.7-.6 1.5 1-.2 1.7-1.2 1Z" /></svg>; }
 function LogsIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.5h12v15H6z" /><path d="M9 8h6M9 12h6M9 16h4" /></svg>; }
 function AgentIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z" /><path d="M5.5 19c.8-3.2 3.3-5 6.5-5s5.7 1.8 6.5 5" /><path d="M18 8.5h2.5M3.5 8.5H6M12 2v1.5" /></svg>; }
+function HelpIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M9.3 9.3a2.8 2.8 0 1 1 3.7 2.6c-.8.3-1 .9-1 1.6v.4" /><path d="M12 17.1h.01" /></svg>; }
+function ApiIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.6 8.4-4.1 3.6 4.1 3.6M15.4 8.4l4.1 3.6-4.1 3.6" /><path d="M13.6 6.2 10.4 17.8" /></svg>; }
