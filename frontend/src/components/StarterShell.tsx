@@ -9,6 +9,8 @@ interface Props {
   datasetName?: string;
   onNavigate: (section: StarterSection) => void;
   locale?: AppLocale;
+  // 2026-11-06 新增：顶部品牌区显示开关，false 时整行不渲染（见「通用设置」）
+  showBrandBar?: boolean;
   children: ReactNode;
 }
 
@@ -25,7 +27,7 @@ const navigation: Array<{ id: StarterSection; label: string; icon: ReactNode }> 
  * 社区版工作台外壳。视觉和信息层级参考 YoloWebAgent。
  * Agent MVP 为本地只读助手 + 人工确认提交；不含 Workflow / 无人值守入口。
  */
-export function StarterShell({ active, datasetName, onNavigate, locale = "zh", children }: Props) {
+export function StarterShell({ active, datasetName, onNavigate, locale = "zh", showBrandBar = true, children }: Props) {
   const text = localeText[locale];
   const labels: Record<StarterSection, string> = {
     workspace: text.datasets,
@@ -37,16 +39,18 @@ export function StarterShell({ active, datasetName, onNavigate, locale = "zh", c
   };
   return (
     <div className="starter-shell">
-      <header className="starter-topbar">
-        <button className="starter-topbar-brand" onClick={() => onNavigate("workspace")} aria-label={text.backToDatasets}>
-          <span className="starter-topbar-mark">Y</span>
-          <span>YoloWebAgent</span>
-          <span className="starter-version">Starter</span>
-        </button>
-        <div className="starter-topbar-spacer" />
-        {datasetName ? <span className="starter-current-dataset">{text.currentDataset}{datasetName}</span> : null}
-        <span className="starter-local-badge"><LocalIcon /> {text.localMode}</span>
-      </header>
+      {showBrandBar && (
+        <header className="starter-topbar">
+          <button className="starter-topbar-brand" onClick={() => onNavigate("workspace")} aria-label={text.backToDatasets}>
+            <span className="starter-topbar-mark">Y</span>
+            <span>YoloWebAgent</span>
+            <span className="starter-version">Starter</span>
+          </button>
+          <div className="starter-topbar-spacer" />
+          {datasetName ? <span className="starter-current-dataset">{text.currentDataset}{datasetName}</span> : null}
+          <span className="starter-local-badge"><LocalIcon /> {text.localMode}</span>
+        </header>
+      )}
       <div className="starter-layout">
         <aside className="starter-sidebar">
           <div className="starter-workspace-brand">

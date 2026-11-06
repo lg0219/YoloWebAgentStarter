@@ -26,8 +26,8 @@ const copy = {
     llmNavDescription: "Provider、模型与 API Key",
     samNav: "SAM 辅助",
     samNavDescription: "模型、设备与建议方式",
-    languageNav: "语言",
-    languageNavDescription: "工作台显示偏好",
+    generalNav: "通用设置",
+    generalNavDescription: "界面显示偏好",
     llmTitle: "Agent LLM",
     llmSubtitle: "对齐上游设置页：启用后使用 OpenAI 兼容接口；关闭则使用本地规则规划器。密钥只保存在 settings.json。",
     enabled: "启用 LLM Provider",
@@ -81,9 +81,11 @@ const copy = {
     saveAnnotation: "保存标注设置",
     savedAnnotation: "标注设置已保存",
     annotationFooter: "改变线宽后，新画的框线立即使用新值；已有框线不变。",
-    languageTitle: "语言设置",
-    languageSubtitle: "切换工作台界面语言。偏好只保存在本机浏览器中。",
+    generalTitle: "通用设置",
+    generalSubtitle: "界面显示偏好，所有设置只保存在本机浏览器中。",
     displayLanguage: "显示语言",
+    brandBarLabel: "显示顶部品牌区",
+    brandBarHint: "关闭后隐藏顶部的品牌、当前数据集名和本地模式；返回数据集请用左侧「数据集」入口。",
     chinese: "简体中文",
     english: "English",
     applied: "已立即应用",
@@ -114,8 +116,8 @@ const copy = {
     llmNavDescription: "Provider, model, and API key",
     samNav: "SAM assist",
     samNavDescription: "Model, device, and proposal behavior",
-    languageNav: "Language",
-    languageNavDescription: "Workspace display preference",
+    generalNav: "General",
+    generalNavDescription: "Workspace display preferences",
     llmTitle: "Agent LLM",
     llmSubtitle: "Upstream-aligned settings: enable OpenAI-compatible chat; disable for the local rule planner. Keys live in settings.json only.",
     enabled: "Enable LLM provider",
@@ -169,9 +171,11 @@ const copy = {
     saveAnnotation: "Save annotation settings",
     savedAnnotation: "Annotation settings saved",
     annotationFooter: "New boxes use the new width immediately; existing boxes are unchanged.",
-    languageTitle: "Language settings",
-    languageSubtitle: "Switch the workspace language. The preference is stored in this browser only.",
+    generalTitle: "General settings",
+    generalSubtitle: "Workspace display preferences. Preferences are stored in this browser only.",
     displayLanguage: "Display language",
+    brandBarLabel: "Show top brand bar",
+    brandBarHint: "When off, the brand, current dataset name, and local-mode badge are hidden. Use the Datasets item in the sidebar to go back.",
     chinese: "简体中文",
     english: "English",
     applied: "Applied immediately",
@@ -240,12 +244,17 @@ export function SettingsView({
   tab,
   locale,
   onLocaleChange,
+  showBrandBar,
+  onBrandBarChange,
   onSamSettingsChange,
   onTabChange,
 }: {
   tab: SettingsTab;
   locale: AppLocale;
   onLocaleChange: (locale: AppLocale) => void;
+  // 2026-11-06 新增：顶部品牌区显示开关（存本机浏览器）
+  showBrandBar: boolean;
+  onBrandBarChange: (show: boolean) => void;
   onSamSettingsChange?: () => void;
   onTabChange: (tab: SettingsTab) => void;
 }) {
@@ -288,8 +297,8 @@ export function SettingsView({
           <SettingsNavigationItem
             active={tab === "language"}
             icon={<LanguageIcon />}
-            title={text.languageNav}
-            description={text.languageNavDescription}
+            title={text.generalNav}
+            description={text.generalNavDescription}
             onClick={() => onTabChange("language")}
           />
         </nav>
@@ -301,7 +310,7 @@ export function SettingsView({
           ) : tab === "annotation" ? (
             <AnnotationSettingsPanel locale={locale} text={text} />
           ) : (
-            <LanguageSettingsPanel locale={locale} text={text} onLocaleChange={onLocaleChange} />
+            <GeneralSettingsPanel locale={locale} text={text} onLocaleChange={onLocaleChange} showBrandBar={showBrandBar} onBrandBarChange={onBrandBarChange} />
           )}
         </div>
       </div>
@@ -777,14 +786,18 @@ function AnnotationSettingsPanel({ locale, text }: { locale: AppLocale; text: Se
   );
 }
 
-function LanguageSettingsPanel({
+function GeneralSettingsPanel({
   locale,
   text,
   onLocaleChange,
+  showBrandBar,
+  onBrandBarChange,
 }: {
   locale: AppLocale;
   text: SettingsText;
   onLocaleChange: (locale: AppLocale) => void;
+  showBrandBar: boolean;
+  onBrandBarChange: (show: boolean) => void;
 }) {
   const change = (next: AppLocale) => {
     saveLocale(next);
@@ -795,8 +808,8 @@ function LanguageSettingsPanel({
       <header className="settings-card-head">
         <div className="settings-card-icon"><LanguageIcon /></div>
         <div>
-          <h2>{text.languageTitle}</h2>
-          <p>{text.languageSubtitle}</p>
+          <h2>{text.generalTitle}</h2>
+          <p>{text.generalSubtitle}</p>
         </div>
         <span className="settings-status ready">{text.applied}</span>
       </header>
@@ -806,6 +819,16 @@ function LanguageSettingsPanel({
           <button type="button" className={locale === "zh" ? "active" : ""} onClick={() => change("zh")}>{text.chinese}</button>
           <button type="button" className={locale === "en" ? "active" : ""} onClick={() => change("en")}>{text.english}</button>
         </div>
+      </div>
+      {/* 2026-11-06 新增：顶部品牌区开关。明示隐藏后哪些信息会消失，避免用户误以为功能丢失。 */}
+      <div className="brand-bar-toggle">
+        <label className="brand-bar-checkbox" htmlFor="brand-bar-visible">
+          <input id="brand-bar-visible" type="checkbox" checked={showBrandBar} onChange={(event) => onBrandBarChange(event.target.checked)} />
+          <span>
+            <strong>{text.brandBarLabel}</strong>
+            <small>{text.brandBarHint}</small>
+          </span>
+        </label>
       </div>
       <footer className="settings-footer"><span>{text.applied}</span></footer>
     </section>
