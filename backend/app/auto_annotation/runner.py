@@ -26,13 +26,13 @@ class AutoAnnotationRunner:
             if spec is None:
                 return
             log_store = TrainingLogStore(spec["logs_path"])
-            log_store.append(f"Auto annotation task {task_id} is waiting for the local compute slot.")
+            log_store.append(f"自动标注任务 {task_id} 正在等待本地计算资源。")
             with local_compute_gate.acquire():
                 if self._stop_requested(task_id):
                     self._finish(task_id, log_store, [])
                     return
-                log_store.append(f"Auto annotation started for task {task_id}.")
-                log_store.append(f"Model: {spec['model_id']} · {spec['total_images']} images · confidence={spec['confidence']:.2f} · IoU={spec['iou']:.2f}")
+                log_store.append(f"自动标注任务 {task_id} 已开始。")
+                log_store.append(f"模型：{spec['model_id']} · 共 {spec['total_images']} 张图 · 置信度={spec['confidence']:.2f} · IoU={spec['iou']:.2f}")
                 errors: list[str] = []
                 for index, image_id in enumerate(spec["image_ids"], start=1):
                     if self._stop_requested(task_id):
@@ -55,7 +55,7 @@ class AutoAnnotationRunner:
                             task = session.get(AutoAnnotationTask, task_id)
                             image = session.get(ImageItem, image_id)
                             if task is None or image is None:
-                                raise RuntimeError("Auto-annotation task or image was removed while running.")
+                                raise RuntimeError("运行中任务或图片已被删除。")
                             created, skipped, image_skipped = save_auto_annotations(session, task, image, detections)
                             task.processed_images = index
                             task.created_annotations += created
@@ -63,9 +63,9 @@ class AutoAnnotationRunner:
                             task.progress_percent = round(index / max(task.total_images, 1) * 100, 2)
                             session.commit()
                         if image_skipped:
-                            log_store.append(f"{image_id}: skipped because the image was annotated after the task was queued.")
+                            log_store.append(f"{image_id}：入队后该图片已被标注，本次跳过。")
                         if skipped:
-                            log_store.append(f"{image_id}: created {created}, skipped {skipped} unmapped or invalid detections.")
+                            log_store.append(f"{image_id}：新增 {created} 个，跳过 {skipped} 个无法映射或无效的检测。")
                     except Exception as exc:
                         errors.append(f"{image_id}: {exc}")
                         self._mark_image_failed(task_id, index)
@@ -82,14 +82,14 @@ class AutoAnnotationRunner:
             if task.stop_requested:
                 task.status = "stopped"
                 task.finished_at = utc_now()
-                task.error_message = "Auto annotation stopped before the task started."
+                task.error_message = "任务尚未开始即被停止。"
                 session.commit()
                 return None
             model = session.get(ModelVersion, task.model_id)
             if model is None:
                 task.status = "failed"
                 task.finished_at = utc_now()
-                task.error_message = "The selected model was removed before the task started."
+                task.error_message = "任务开始前所选模型已被删除。"
                 session.commit()
                 return None
             image_query = select(ImageItem.id).where(ImageItem.dataset_id == task.dataset_id)
@@ -120,10 +120,10 @@ class AutoAnnotationRunner:
         with self.session_factory() as session:
             image = session.get(ImageItem, image_id)
             if image is None or image.dataset_id != dataset_id:
-                raise RuntimeError("Image was not found in the selected dataset.")
+                raise RuntimeError("所选数据集中找不到该图片。")
             path = self.storage.image_path(dataset_id, image.storage_name)
         if not path.is_file():
-            raise RuntimeError("Managed image file is missing.")
+            raise RuntimeError("受管图片文件已丢失。")
         return path
 
     def _stop_requested(self, task_id: str) -> bool:
@@ -150,15 +150,15 @@ class AutoAnnotationRunner:
             task.finished_at = utc_now()
             if stopped:
                 task.status = "stopped"
-                task.error_message = "Auto annotation stopped by user."
+                task.error_message = "用户已停止自动标注。"
                 log_store.append(task.error_message)
             elif errors and task.processed_images <= len(errors):
                 task.status = "failed"
-                task.error_message = f"Auto annotation failed for {len(errors)} image(s)."
+                task.error_message = f"{len(errors)} 张图片自动标注失败。"
                 log_store.append(task.error_message)
             else:
                 task.status = "completed"
                 task.progress_percent = 100.0
-                task.error_message = f"Completed with {len(errors)} skipped image(s)." if errors else None
-                log_store.append("Auto annotation completed. Review and correct the generated annotations before training.")
+                task.error_message = f"已完成，跳过 {len(errors)} 张图片。" if errors else None
+                log_store.append("自动标注已完成。训练前请先审核并修正生成的标注。")
             session.commit()

@@ -39,26 +39,26 @@ class AutoAnnotationService:
         dataset = get_dataset(session, dataset_id)
         model = session.get(ModelVersion, payload.model_id)
         if model is None:
-            raise NotFoundError("model_not_found", "Model version was not found.")
+            raise NotFoundError("model_not_found", "未找到该模型版本。")
         if model.status != "active":
-            raise ValidationError("model_archived", "Auto annotation requires an active managed model.")
+            raise ValidationError("model_archived", "自动标注需要使用未归档的受管模型。")
         if model.format != "pt" or model.engine_type != "ultralytics":
-            raise ValidationError("unsupported_model_engine", "Auto annotation requires a managed Ultralytics PT model.")
+            raise ValidationError("unsupported_model_engine", "自动标注只支持受管的 Ultralytics PT 模型。")
         model_path = self.storage.managed_model_path(model.model_path)
         if not model_path.is_file():
-            raise NotFoundError("model_file_missing", "The managed model file is missing.")
+            raise NotFoundError("model_file_missing", "受管模型文件已丢失。")
         if model.task_type != dataset.task_type:
-            raise ValidationError("auto_annotation_task_mismatch", "The model task type must match the dataset task type.")
+            raise ValidationError("auto_annotation_task_mismatch", "模型的任务类型必须与数据集的任务类型一致。")
         image_query = select(ImageItem).where(ImageItem.dataset_id == dataset_id)
         if payload.skip_annotated_images:
             image_query = image_query.where(~ImageItem.annotations.any())
         images = list(session.scalars(image_query.order_by(ImageItem.created_at, ImageItem.id)))
         if not images:
-            message = "The dataset has no unannotated images. Disable skip_annotated_images to process existing annotations." if payload.skip_annotated_images else "The dataset has no images to annotate."
+            message = "数据集中没有未标注的图片。若要处理已有标注的图片，请关闭「跳过已有标注的图片」。" if payload.skip_annotated_images else "数据集中没有可标注的图片。"
             raise ValidationError("auto_annotation_dataset_empty", message)
         target_classes = list(session.scalars(select(ClassLabel).where(ClassLabel.dataset_id == dataset_id).order_by(ClassLabel.class_index)))
         if not target_classes:
-            raise ValidationError("auto_annotation_classes_missing", "Add at least one dataset class before running auto annotation.")
+            raise ValidationError("auto_annotation_classes_missing", "请先为数据集添加至少一个类别，再运行自动标注。")
         source_classes = list(
             session.scalars(
                 select(ClassLabel).where(ClassLabel.dataset_id == model.dataset_id).order_by(ClassLabel.class_index)
@@ -104,7 +104,7 @@ class AutoAnnotationService:
     def get_task(self, session: Session, task_id: str) -> AutoAnnotationTask:
         task = session.get(AutoAnnotationTask, task_id)
         if task is None:
-            raise NotFoundError("auto_annotation_task_not_found", "Auto-annotation task was not found.")
+            raise NotFoundError("auto_annotation_task_not_found", "未找到该自动标注任务。")
         return task
 
     def stop_task(self, session: Session, task_id: str) -> AutoAnnotationTask:
@@ -114,7 +114,7 @@ class AutoAnnotationService:
         if task.status == "pending":
             task.status = "stopped"
             task.finished_at = utc_now()
-            task.error_message = "Auto annotation stopped before the task started."
+            task.error_message = "任务尚未开始即被停止。"
         else:
             task.stop_requested = True
         session.commit()
@@ -144,14 +144,14 @@ class AutoAnnotationService:
             try:
                 source_index = int(raw_index)
             except (TypeError, ValueError) as exc:
-                raise ValidationError("invalid_class_mapping", "Model class indexes must be integers.") from exc
+                raise ValidationError("invalid_class_mapping", "模型类别索引必须是整数。") from exc
             if source_index < 0 or target_id not in target_by_id:
-                raise ValidationError("invalid_class_mapping", "Class mapping must point to an existing dataset class.")
+                raise ValidationError("invalid_class_mapping", "类别映射必须指向数据集中已有的类别。")
             if source_classes and source_index not in {item.class_index for item in source_classes}:
-                raise ValidationError("invalid_class_mapping", "Class mapping refers to a class not provided by the selected model.")
+                raise ValidationError("invalid_class_mapping", "类别映射引用了所选模型未提供的类别。")
             mapping[str(source_index)] = target_id
         if not mapping:
-            raise ValidationError("class_mapping_empty", "No model classes can be mapped to this dataset.")
+            raise ValidationError("class_mapping_empty", "没有可与该数据集匹配的模型类别。")
         return mapping
 
 
