@@ -195,7 +195,7 @@ export const api = {
   stopAutoAnnotation: (taskId: string) => request<AutoAnnotationTask>(`/api/auto-annotation/${taskId}/stop`, { method: "POST" }),
   autoAnnotationLogs: (taskId: string, tail = 120) => request<AutoAnnotationLog>(`/api/auto-annotation/${taskId}/logs?tail=${tail}`),
   listModelTests: (modelId: string) => request<ModelTestRecord[]>(`/api/models/${modelId}/tests`),
-  evaluateModel: (modelId: string, split: SplitName = "val") => request<ModelEvaluationRecord>(`/api/models/${modelId}/evaluate`, json({ split })),
+  evaluateModel: (modelId: string, split: SplitName = "val", confidence = 0.25, iou = 0.5) => request<ModelEvaluationRecord>(`/api/models/${modelId}/evaluate`, json({ split, confidence, iou })),
   listModelEvaluations: (modelId: string) => request<ModelEvaluationRecord[]>(`/api/models/${modelId}/evaluations`),
   modelEvaluationLogs: (modelId: string, evaluationId: string, tail = 500) => request<{ evaluation_id: string; logs: string; line_count: number }>(`/api/models/${modelId}/evaluations/${evaluationId}/logs?tail=${tail}`),
   modelEvaluationArtifactUrl: (modelId: string, evaluationId: string, artifact: "confusion_matrix" | "pr_curve" | "box_pr_curve" | "mask_pr_curve" | "predictions") => apiUrl(`/api/models/${modelId}/evaluations/${evaluationId}/artifacts/${artifact}`),

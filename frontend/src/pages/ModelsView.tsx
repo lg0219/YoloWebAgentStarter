@@ -151,8 +151,8 @@ export function ModelsView({ dataset, focusModelId, onFocusModelConsumed, onAskA
     }
   };
 
-  const evaluate = (split: SplitName) => detailModel && run(async () => {
-    const record = await api.evaluateModel(detailModel.id, split);
+  const evaluate = (split: SplitName, confidence: number, iou: number) => detailModel && run(async () => {
+    const record = await api.evaluateModel(detailModel.id, split, confidence, iou);
     setEvaluations((items) => [record, ...items]);
   });
 
