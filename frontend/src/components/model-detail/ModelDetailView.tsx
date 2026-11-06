@@ -29,7 +29,7 @@ interface Props {
   onExportOnnx: () => void;
   onToggleArchive: () => void;
   onDelete: () => void;
-  onEvaluate: (split: SplitName) => void;
+  onEvaluate: (split: SplitName, confidence: number, iou: number) => void;
   onSaved: (model: ModelVersion) => void;
 }
 
