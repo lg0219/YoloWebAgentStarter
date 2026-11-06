@@ -11,6 +11,7 @@ import { AgentView, type AgentPageContext } from "./pages/AgentView";
 import { AutoAnnotationModal } from "./components/AutoAnnotationModal";
 import { ImportCenterModal } from "./components/ImportCenterModal";
 import { readLocale, saveLocale, type AppLocale } from "./locale";
+import { readBrandBar, saveBrandBar } from "./brandBar";
 import type { Annotation, BBox, ClassLabel, Dataset, DatasetQualityReport, DuplicateReport, ImageItem, SamCapabilities, SamPrediction, SplitName, TaskType, ValidationReport } from "./types";
 
 type View = "workspace" | "annotation" | "training" | "models" | "agent" | "settings-llm" | "settings-sam" | "settings-annotation" | "settings-language" | "logs";
@@ -31,6 +32,8 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [samCapabilities, setSamCapabilities] = useState<SamCapabilities>();
   const [locale, setLocale] = useState<AppLocale>(() => readLocale());
+  // 2026-11-06 新增：顶部品牌区显示开关（本机浏览器，见设置页「通用设置」）
+  const [showBrandBar, setShowBrandBar] = useState<boolean>(() => readBrandBar());
   const [annotationDirty, setAnnotationDirty] = useState(false);
   const [focusTrainingTaskId, setFocusTrainingTaskId] = useState<string>();
   const [focusModelId, setFocusModelId] = useState<string>();
@@ -249,7 +252,7 @@ export default function App() {
   };
 
   return (
-    <StarterShell active={activeSection} datasetName={selected?.name} onNavigate={navigate} locale={locale}>
+    <StarterShell active={activeSection} datasetName={selected?.name} onNavigate={navigate} locale={locale} showBrandBar={showBrandBar}>
       {error && <div className="toast error">{error}</div>}
       {notice && <div className="toast success">{notice}</div>}
       {leaveDialog}
@@ -311,6 +314,11 @@ export default function App() {
           tab={view === "settings-llm" ? "llm" : view === "settings-sam" ? "sam" : "language"}
           locale={locale}
           onLocaleChange={setLocale}
+          showBrandBar={showBrandBar}
+          onBrandBarChange={(show) => {
+            saveBrandBar(show);
+            setShowBrandBar(show);
+          }}
           onTabChange={(tab) =>
             setView(tab === "llm" ? "settings-llm" : tab === "sam" ? "settings-sam" : tab === "annotation" ? "settings-annotation" : "settings-language")
           }
