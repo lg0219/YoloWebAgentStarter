@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { AppLocale } from "../locale";
 import { localeText } from "../locale";
 
-export type StarterSection = "workspace" | "training" | "models" | "agent" | "logs" | "settings";
+export type StarterSection = "workspace" | "training" | "models" | "pipeline" | "agent" | "logs" | "settings";
 
 interface Props {
   active: StarterSection;
@@ -16,6 +16,7 @@ const navigation: Array<{ id: StarterSection; label: string; icon: ReactNode }> 
   { id: "workspace", label: "数据集", icon: <DatasetIcon /> },
   { id: "training", label: "训练", icon: <TrainingIcon /> },
   { id: "models", label: "模型", icon: <ModelIcon /> },
+  { id: "pipeline", label: "智能分析", icon: <PipelineIcon /> },
   { id: "agent", label: "智能体", icon: <AgentIcon /> },
   { id: "logs", label: "日志", icon: <LogsIcon /> },
   { id: "settings", label: "设置", icon: <SettingsIcon /> },
@@ -31,6 +32,7 @@ export function StarterShell({ active, datasetName, onNavigate, locale = "zh", c
     workspace: text.datasets,
     training: text.training,
     models: text.models,
+    pipeline: "智能分析",
     agent: text.agent,
     settings: text.settingsGroup,
     logs: text.logs,
@@ -86,6 +88,8 @@ function NavigationButton({ item, active, labels, onNavigate }: { item: (typeof 
     {item.icon}<span>{labels[item.id]}</span>
   </button>;
 }
+
+function PipelineIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="7" height="7" rx="1.5" /><rect x="13.5" y="13" width="7" height="7" rx="1.5" /><path d="M10.5 7.5h3a2 2 0 0 1 2 2v3.5" /><path d="M13.5 16.5h-3a2 2 0 0 1-2-2V11" /></svg>; }
 
 function DatasetIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5v-11Z" /><path d="m7.5 15 2.5-3 2 2.2 1.7-1.8 2.8 3.1" /><circle cx="9" cy="9" r="1.2" /></svg>; }
 function TrainingIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18V9m5 9V5m5 13v-7m4 7V8" /><path d="M3.5 20.5h17" /></svg>; }
