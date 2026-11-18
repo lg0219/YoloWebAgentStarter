@@ -51,6 +51,9 @@ export function PipelineView() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [bridgeState, setBridgeState] = useState("检查中…");
+  const [notice, setNotice] = useState("");
+  const [report, setReport] = useState("");
+  const [promoting, setPromoting] = useState(false);
   const timer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -135,6 +138,36 @@ export function PipelineView() {
     await fetch(apiUrl("/api/pipeline/batch/" + job.id + "/cancel"), { method: "POST" });
   };
 
+  const promote = async () => {
+    if (!job) return;
+    setPromoting(true);
+    setNotice("");
+    try {
+      const response = await fetch(apiUrl("/api/pipeline/batch/" + job.id + "/promote"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ only_detected: true }),
+      });
+      const data = (await response.json()) as { dataset_id?: string; imported?: number; picked?: number; detail?: string };
+      if (!response.ok) throw new Error(data.detail ?? "回灌失败");
+      setNotice("已回灌 " + (data.imported ?? 0) + " 张到数据集 " + (data.dataset_id ?? "") + "（共筛选 " + (data.picked ?? 0) + " 张）");
+    } catch (err) {
+      setNotice("回灌失败：" + String(err));
+    } finally {
+      setPromoting(false);
+    }
+  };
+
+  const loadReport = async () => {
+    if (!job) return;
+    try {
+      const data = await jget<{ markdown: string }>("/api/pipeline/batch/" + job.id + "/report");
+      setReport(data.markdown);
+    } catch (err) {
+      setNotice("日报生成失败：" + String(err));
+    }
+  };
+
   const pct = job && job.total > 0 ? Math.round((job.done * 100) / job.total) : 0;
   const running = job ? job.status === "running" || job.status === "queued" : false;
 
@@ -198,6 +231,10 @@ export function PipelineView() {
             <span className="muted">状态 {job.status}</span>
             <div style={{ flex: 1 }} />
             <button className="button" disabled={!running} onClick={() => void cancel()}>取消</button>
+            <button className="button" disabled={running || promoting} onClick={() => void loadReport()}>生成日报</button>
+            <button className="button primary" disabled={running || promoting} onClick={() => void promote()}>
+              {promoting ? "回灌中…" : "回灌待标池"}
+            </button>
             <a className="button" href={apiUrl("/api/pipeline/batch/" + job.id + "/export.csv")} target="_blank" rel="noreferrer">导出 CSV</a>
           </div>
           <div style={{ height: 10, background: "#e8edf4", borderRadius: 6, overflow: "hidden" }}>
@@ -207,6 +244,19 @@ export function PipelineView() {
             进度 {job.done}/{job.total} · 有检出 {job.detected} · 失败 {job.failed} · 已用 {job.elapsed_sec}s
             {job.eta_sec ? " · 预计剩余 " + Math.round(job.eta_sec) + "s" : ""}
           </div>
+        </div>
+      ) : null}
+
+      {notice ? <div className="panel" style={{ padding: 12 }}><span className="muted">{notice}</span></div> : null}
+
+      {report ? (
+        <div className="panel" style={{ padding: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+            <strong>生产日报</strong>
+            <div style={{ flex: 1 }} />
+            <button className="button" onClick={() => setReport("")}>收起</button>
+          </div>
+          <pre style={{ whiteSpace: "pre-wrap", fontSize: 12.5, margin: 0, maxHeight: 420, overflow: "auto" }}>{report}</pre>
         </div>
       ) : null}
 
