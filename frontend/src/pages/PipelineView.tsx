@@ -33,6 +33,14 @@ interface JobItem {
   error?: string;
 }
 
+type SourceKind = "dir" | "upload" | "dataset";
+
+const SOURCE_OPTIONS: Array<{ id: SourceKind; label: string }> = [
+  { id: "dir", label: "指定目录（生产）" },
+  { id: "upload", label: "上传图片" },
+  { id: "dataset", label: "回归测试（数据集）" },
+];
+
 async function jget<T>(path: string): Promise<T> {
   const response = await fetch(apiUrl(path));
   if (!response.ok) throw new Error(await response.text());
@@ -54,6 +62,12 @@ export function PipelineView() {
   const [notice, setNotice] = useState("");
   const [report, setReport] = useState("");
   const [promoting, setPromoting] = useState(false);
+  const [source, setSource] = useState<SourceKind>("dir");
+  const [dir, setDir] = useState("");
+  const [roots, setRoots] = useState<string[]>([]);
+  const [recursive, setRecursive] = useState(false);
+  const [skipProcessed, setSkipProcessed] = useState(true);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const timer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -77,6 +91,13 @@ export function PipelineView() {
         setDatasetId(list[0] ? list[0].id : "");
       } catch (err) {
         setError("数据集读取失败：" + String(err));
+      }
+      try {
+        const rootsData = await jget<{ roots: string[] }>("/api/pipeline/roots");
+        setRoots(rootsData.roots);
+        if (rootsData.roots.length > 0) setDir(rootsData.roots[0]);
+      } catch {
+        setRoots([]);
       }
     })();
     return () => {
@@ -102,24 +123,51 @@ export function PipelineView() {
   );
 
   const start = async () => {
-    if (!datasetId) {
+    if (source === "dataset" && !datasetId) {
       setError("先选一个数据集");
+      return;
+    }
+    if (source === "dir" && !dir.trim()) {
+      setError("先填写要扫描的目录");
+      return;
+    }
+    if (source === "upload" && (!fileRef.current || fileRef.current.files === null || fileRef.current.files.length === 0)) {
+      setError("先选择要上传的图片");
       return;
     }
     setBusy(true);
     setError("");
     setItems([]);
     try {
-      const response = await fetch(apiUrl("/api/pipeline/batch"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dataset_id: datasetId,
-          template: template,
-          limit: Number(limit) || 0,
-          save_images: saveImages,
-        }),
-      });
+      let response: Response;
+      if (source === "upload") {
+        const picked = fileRef.current!.files!;
+        const form = new FormData();
+        form.append("template", template);
+        form.append("save_images", saveImages ? "true" : "false");
+        for (let index = 0; index < picked.length; index += 1) {
+          form.append("files", picked[index]);
+        }
+        response = await fetch(apiUrl("/api/pipeline/batch/upload"), { method: "POST", body: form });
+      } else {
+        const body =
+          source === "dataset"
+            ? { source: "dataset", dataset_id: datasetId, template, limit: Number(limit) || 0, save_images: saveImages }
+            : {
+                source: "dir",
+                dir: dir.trim(),
+                template,
+                limit: Number(limit) || 0,
+                save_images: saveImages,
+                recursive,
+                skip_processed: skipProcessed,
+              };
+        response = await fetch(apiUrl("/api/pipeline/batch"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      }
       const meta = (await response.json()) as JobMeta & { detail?: string };
       if (!response.ok) throw new Error(meta.detail ?? "创建任务失败");
       setJob(meta);
@@ -184,7 +232,18 @@ export function PipelineView() {
       {error ? <div className="toast error">{error}</div> : null}
 
       <div className="panel" style={{ padding: 16, display: "grid", gap: 12 }}>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {SOURCE_OPTIONS.map((option) => (
+            <button
+              key={option.id}
+              className={source === option.id ? "button primary" : "button"}
+              onClick={() => setSource(option.id)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
           <label style={{ display: "grid", gap: 4 }}>
             <span className="muted">模板</span>
             <select value={template} onChange={(event) => setTemplate(event.target.value)}>
@@ -195,31 +254,69 @@ export function PipelineView() {
               ))}
             </select>
           </label>
-          <label style={{ display: "grid", gap: 4 }}>
-            <span className="muted">数据集</span>
-            <select value={datasetId} onChange={(event) => setDatasetId(event.target.value)}>
-              {datasets.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}（{item.image_count} 张）
-                </option>
-              ))}
-            </select>
-          </label>
-          <label style={{ display: "grid", gap: 4 }}>
-            <span className="muted">上限张数（0 = 全部）</span>
-            <input type="number" min={0} value={limit} onChange={(event) => setLimit(event.target.value)} style={{ width: 130 }} />
-          </label>
-          <label style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 18 }}>
+          {source === "dataset" ? (
+            <label style={{ display: "grid", gap: 4 }}>
+              <span className="muted">数据集</span>
+              <select value={datasetId} onChange={(event) => setDatasetId(event.target.value)}>
+                {datasets.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}（{item.image_count} 张）
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {source === "dir" ? (
+            <label style={{ display: "grid", gap: 4, flex: 1, minWidth: 420 }}>
+              <span className="muted">目录路径</span>
+              <input
+                type="text"
+                value={dir}
+                onChange={(event) => setDir(event.target.value)}
+                placeholder={roots[0] ? roots[0] + "/incoming" : "/path/to/incoming"}
+                style={{ width: "100%" }}
+              />
+            </label>
+          ) : null}
+          {source === "upload" ? (
+            <label style={{ display: "grid", gap: 4 }}>
+              <span className="muted">选择图片（几百张以内）</span>
+              <input ref={fileRef} type="file" accept="image/*" multiple />
+            </label>
+          ) : null}
+          {source !== "upload" ? (
+            <label style={{ display: "grid", gap: 4 }}>
+              <span className="muted">上限张数（0 = 全部）</span>
+              <input type="number" min={0} value={limit} onChange={(event) => setLimit(event.target.value)} style={{ width: 120 }} />
+            </label>
+          ) : null}
+          <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <input type="checkbox" checked={saveImages} onChange={(event) => setSaveImages(event.target.checked)} />
             <span className="muted">保存标注图</span>
           </label>
-          <button className="button primary" style={{ marginTop: 18 }} disabled={busy || running || !datasetId} onClick={() => void start()}>
+          {source === "dir" ? (
+            <>
+              <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input type="checkbox" checked={recursive} onChange={(event) => setRecursive(event.target.checked)} />
+                <span className="muted">含子目录</span>
+              </label>
+              <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input type="checkbox" checked={skipProcessed} onChange={(event) => setSkipProcessed(event.target.checked)} />
+                <span className="muted">跳过已处理</span>
+              </label>
+            </>
+          ) : null}
+          <button className="button primary" disabled={busy || running} onClick={() => void start()}>
             {busy || running ? "运行中…" : "开始分析"}
           </button>
-          <span className="muted" style={{ marginTop: 18 }}>推理服务：{bridgeState}</span>
+          <span className="muted">推理服务：{bridgeState}</span>
         </div>
         <p className="muted" style={{ margin: 0, fontSize: 12 }}>
-          单卡串行执行，一批跑完再跑下一批。图片由服务端直接读取，不经过浏览器上传。
+          {source === "dir"
+            ? "服务端直接扫描目录读盘，产线落盘即跑；仅允许白名单目录：" + (roots.length ? roots.join("、") : "未配置")
+            : source === "upload"
+              ? "浏览器直传，适合临时少量图片；大批量请用目录模式。"
+              : "回归测试：用训练时同一批数据验证模型有没有退化，不代表生产表现。"}
         </p>
       </div>
 

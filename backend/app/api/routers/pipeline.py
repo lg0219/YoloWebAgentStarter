@@ -10,10 +10,11 @@ import os
 from pathlib import Path
 
 import httpx
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, File, Form, UploadFile
 from fastapi.responses import FileResponse, Response
 
-from app.api.dependencies import get_storage
+from app.api.dependencies import get_settings, get_storage
+from app.core.config import Settings
 from app.core.errors import NotFoundError, ValidationError
 from app.core.storage import Storage
 
@@ -30,7 +31,7 @@ def _proxy(method: str, path: str, **kwargs) -> Response:
         with httpx.Client(timeout=PROXY_TIMEOUT) as client:
             upstream = client.request(method, url, **kwargs)
     except httpx.HTTPError as exc:
-        raise ValidationError(f"推理服务不可用：{exc}") from exc
+        raise ValidationError("bridge_unavailable", f"推理服务不可用：{exc}") from exc
     return Response(
         content=upstream.content,
         status_code=upstream.status_code,
@@ -56,25 +57,100 @@ def jobs() -> Response:
     return _proxy("GET", "/batch")
 
 
+def _allowed_roots(settings: Settings) -> list[Path]:
+    roots = [settings.data_dir, settings.import_root]
+    for extra in os.environ.get("YWA_PIPELINE_ROOTS", "").split(os.pathsep):
+        if extra.strip():
+            roots.append(Path(extra.strip()))
+    resolved: list[Path] = []
+    for root in roots:
+        try:
+            candidate = root.expanduser().resolve()
+        except OSError:
+            continue
+        if candidate.is_dir():
+            resolved.append(candidate)
+    return resolved
+
+
+def _check_directory(raw: str, settings: Settings) -> Path:
+    path = Path(raw).expanduser()
+    try:
+        path = path.resolve()
+    except OSError as exc:
+        raise ValidationError("directory_invalid", f"目录无法解析：{raw}") from exc
+    if not path.is_dir():
+        raise ValidationError("directory_missing", f"目录不存在：{raw}")
+    for root in _allowed_roots(settings):
+        if path == root or root in path.parents:
+            return path
+    raise ValidationError("directory_not_allowed", f"目录不在允许范围：{raw}（可在 YWA_PIPELINE_ROOTS 中追加根目录）")
+
+
+@router.get("/roots")
+def allowed_roots(settings: Settings = Depends(get_settings)) -> dict:
+    return {"roots": [str(root) for root in _allowed_roots(settings)]}
+
+
 @router.post("/batch")
 def create_batch(
     payload: dict = Body(...),
     storage: Storage = Depends(get_storage),
+    settings: Settings = Depends(get_settings),
 ) -> Response:
-    dataset_id = str(payload.get("dataset_id") or "").strip()
-    if not dataset_id:
-        raise ValidationError("缺少 dataset_id")
-    images_dir = storage.images_dir(dataset_id)
-    if not images_dir.exists():
-        raise NotFoundError(f"数据集图片目录不存在：{dataset_id}")
+    """建批：source=dir（生产目录）/ dataset（回归测试）。"""
+    source = str(payload.get("source") or "dir")
+    if source == "dataset":
+        dataset_id = str(payload.get("dataset_id") or "").strip()
+        if not dataset_id:
+            raise ValidationError("dataset_required", "缺少 dataset_id")
+        images_dir = storage.images_dir(dataset_id)
+        if not images_dir.exists():
+            raise NotFoundError("dataset_dir_missing", f"数据集图片目录不存在：{dataset_id}")
+        target_dir = images_dir
+        title = payload.get("title") or f"回归-{dataset_id}"
+    else:
+        raw_dir = str(payload.get("dir") or "").strip()
+        if not raw_dir:
+            raise ValidationError("directory_required", "缺少目录路径")
+        target_dir = _check_directory(raw_dir, settings)
+        title = payload.get("title") or target_dir.name or str(target_dir)
     body = {
         "template": payload.get("template"),
-        "dir": str(images_dir),
+        "dir": str(target_dir),
         "limit": int(payload.get("limit") or 0),
         "save_images": bool(payload.get("save_images")),
-        "title": payload.get("title") or dataset_id,
+        "recursive": bool(payload.get("recursive")),
+        "skip_processed": bool(payload.get("skip_processed")),
+        "title": title,
     }
     return _proxy("POST", "/batch", json=body)
+
+
+@router.post("/batch/upload")
+async def upload_batch(
+    template: str = Form(""),
+    save_images: bool = Form(False),
+    files: list[UploadFile] = File(...),
+) -> Response:
+    """浏览器直传少量图片建批（几百张以内）。"""
+    payload_files = []
+    for upload in files:
+        content = await upload.read()
+        payload_files.append(
+            ("files", (upload.filename or "image.jpg", content, upload.content_type or "image/jpeg"))
+        )
+    with httpx.Client(timeout=600) as client:
+        upstream = client.post(
+            BRIDGE_URL.rstrip("/") + "/batch/upload",
+            data={"template": template, "save_images": "true" if save_images else "false"},
+            files=payload_files,
+        )
+    return Response(
+        content=upstream.content,
+        status_code=upstream.status_code,
+        media_type=upstream.headers.get("content-type"),
+    )
 
 
 @router.get("/batch/{job_id}")
@@ -102,9 +178,9 @@ def annotated(job_id: str, name: str) -> FileResponse:
     base = (BRIDGE_JOBS_DIR / job_id / "annotated").resolve()
     target = (base / name).resolve()
     if base not in target.parents and target != base:
-        raise ValidationError("非法文件路径")
+        raise ValidationError("path_invalid", "非法文件路径")
     if not target.is_file():
-        raise NotFoundError("标注图不存在")
+        raise NotFoundError("annotated_missing", "标注图不存在")
     return FileResponse(target)
 
 
@@ -143,10 +219,10 @@ def promote_batch(job_id: str, payload: dict | None = Body(default=None)) -> dic
     """把批次里符合条件的图片回灌成一个新数据集（待复标池）。"""
     options = payload or {}
     if _read_meta(job_id) is None:
-        raise NotFoundError(f"批次不存在：{job_id}")
+        raise NotFoundError("job_not_found", f"批次不存在：{job_id}")
     items = _read_items(job_id)
     if not items:
-        raise ValidationError("该批次还没有结果")
+        raise ValidationError("batch_empty", "该批次还没有结果")
 
     only_detected = bool(options.get("only_detected", True))
     min_conf = float(options.get("min_conf") or 0.0)
@@ -164,7 +240,7 @@ def promote_batch(job_id: str, payload: dict | None = Body(default=None)) -> dic
         if candidate and Path(candidate).is_file():
             picked.append(candidate)
     if not picked:
-        raise ValidationError("没有符合条件的图片：可放宽置信度，或取消“仅检出”")
+        raise ValidationError("no_candidates", "没有符合条件的图片：可放宽置信度，或取消“仅检出”")
 
     base = f"http://127.0.0.1:{os.environ.get('YWA_PORT', '8001')}"
     imported = 0
@@ -180,7 +256,7 @@ def promote_batch(job_id: str, payload: dict | None = Body(default=None)) -> dic
                 },
             )
             if created.status_code >= 400:
-                raise ValidationError(f"创建数据集失败：{created.text[:200]}")
+                raise ValidationError("dataset_create_failed", f"创建数据集失败：{created.text[:200]}")
             target = created.json()["id"]
         for chunk in _chunks(picked, 40):
             handles: list = []
@@ -199,7 +275,7 @@ def promote_batch(job_id: str, payload: dict | None = Body(default=None)) -> dic
                 for handle in handles:
                     handle.close()
             if uploaded.status_code >= 400:
-                raise ValidationError(f"导入失败：{uploaded.text[:200]}")
+                raise ValidationError("import_failed", f"导入失败：{uploaded.text[:200]}")
             imported += int(uploaded.json().get("imported") or 0)
     return {"job_id": job_id, "dataset_id": target, "picked": len(picked), "imported": imported}
 
@@ -209,7 +285,7 @@ def batch_report(job_id: str) -> dict:
     """生成该批次的生产日报（Markdown + 结构化统计）。"""
     meta = _read_meta(job_id)
     if meta is None:
-        raise NotFoundError(f"批次不存在：{job_id}")
+        raise NotFoundError("job_not_found", f"批次不存在：{job_id}")
     items = _read_items(job_id)
     done = [item for item in items if item.get("ok")]
     failed = [item for item in items if not item.get("ok")]
