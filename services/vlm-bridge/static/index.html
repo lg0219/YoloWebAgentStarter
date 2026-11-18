@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>智能分析台 · YOLO + SAM + VLM</title>
+<style>
+:root{--bg:#0f1115;--panel:#151821;--line:#23262e;--txt:#e6e8ee;--dim:#9aa3b2}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px}
+header{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+h1{font-size:16px;margin:0;font-weight:600}
+.badge{font-size:12px;padding:3px 9px;border-radius:10px;background:#1b2430;color:#8fb3ff}
+.tabs{display:flex;gap:8px;margin-left:auto}
+.tab{padding:6px 16px;border-radius:8px;background:#1b1f29;cursor:pointer;font-size:13px;border:1px solid var(--line)}
+.tab.on{background:#2d6cdf;border-color:#2d6cdf;color:#fff}
+main{padding:16px 20px 40px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+select,input[type=text],input[type=number]{background:#0b0d12;color:var(--txt);border:1px solid #2a2f3a;border-radius:6px;padding:7px 9px;font-size:13px}
+button{background:#2d6cdf;color:#fff;border:0;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer}
+button.ghost{background:#232936}
+button:disabled{background:#39404d;cursor:not-allowed}
+.grid{display:grid;grid-template-columns:1.15fr 1fr;gap:14px}
+@media(max-width:980px){.grid{grid-template-columns:1fr}}
+canvas{width:100%;border-radius:6px;background:#0b0d12;display:block}
+pre{white-space:pre-wrap;word-break:break-all;font-size:12px;line-height:1.5;margin:0;max-height:300px;overflow:auto}
+.kv{font-size:12px;color:var(--dim);margin:6px 0}
+.bar{height:14px;background:#0b0d12;border-radius:7px;overflow:hidden;border:1px solid #2a2f3a}
+.bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2d6cdf,#4dc3ff);transition:width .3s}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{padding:6px 8px;border-bottom:1px solid #23262e;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:340px}
+th{color:var(--dim);font-weight:500}
+.ok{color:#5ee08a}.bad{color:#ff7b7b}.hit{color:#ffd166}
+.hidden{display:none}
+.hint{font-size:12px;color:var(--dim);line-height:1.6}
+</style></head>
+<body>
+<header>
+  <h1>智能分析台</h1>
+  <span class="badge" id="health">连接中…</span>
+  <div class="tabs">
+    <div class="tab on" data-tab="single">单张</div>
+    <div class="tab" data-tab="batch">批量</div>
+  </div>
+</header>
+<main>
+
+<!-- 单张 -->
+<section id="single">
+  <div class="card">
+    <div class="row">
+      <label>模板</label>
+      <select id="tpl1"></select>
+      <input type="file" id="file" accept="image/*">
+      <button id="go" disabled>分析</button>
+      <span class="kv" id="meta">选择一张图片</span>
+    </div>
+    <div class="grid">
+      <div><canvas id="cv" width="800" height="450"></canvas></div>
+      <div>
+        <div class="kv" id="timing"></div>
+        <h3 style="font-size:13px;margin:10px 0 6px;color:#cdd4e2">VLM 结论</h3>
+        <pre id="vlm">—</pre>
+        <h3 style="font-size:13px;margin:12px 0 6px;color:#cdd4e2">检测 / 分割明细</h3>
+        <pre id="det">—</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 批量 -->
+<section id="batch" class="hidden">
+  <div class="card">
+    <div class="row">
+      <label>模板</label>
+      <select id="tpl2"></select>
+      <label>来源</label>
+      <select id="srcMode">
+        <option value="dir">服务器目录（推荐）</option>
+        <option value="upload">上传多文件</option>
+      </select>
+    </div>
+    <div class="row" id="dirRow">
+      <input type="text" id="dir" style="width:520px" placeholder="/home/linux/YoloWebAgentStarter/data/datasets/ds_xxx/images">
+      <input type="number" id="limit" style="width:110px" placeholder="上限张数" min="0">
+      <label class="kv"><input type="checkbox" id="saveImg"> 保存标注图</label>
+      <button id="startDir" disabled>开始跑批</button>
+    </div>
+    <div class="row hidden" id="upRow">
+      <input type="file" id="upFiles" multiple accept="image/*">
+      <button id="startUp" disabled>上传并跑批</button>
+      <label class="kv"><input type="checkbox" id="saveImg2"> 保存标注图</label>
+    </div>
+    <div class="hint">目录模式由服务端直接读盘，不经过浏览器上传，几千张也不卡。</div>
+  </div>
+
+  <div class="card">
+    <div class="row"><b id="jobTitle">未选择任务</b><span class="kv" id="jobState"></span></div>
+    <div class="bar"><i id="prog"></i></div>
+    <div class="kv" id="jobStat"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="ghost" id="cancel">取消</button>
+      <button class="ghost" id="refresh">刷新明细</button>
+      <a id="csv" class="kv" href="#" target="_blank">导出 CSV</a>
+    </div>
+    <div style="overflow:auto;max-height:420px"><table id="tbl"><thead><tr>
+      <th>#</th><th>文件</th><th>状态</th><th>检出</th><th>最高置信</th><th>面积占比</th><th>结论</th><th>耗时</th>
+    </tr></thead><tbody></tbody></table></div>
+  </div>
+</section>
+
+</main>
+<script>
+const A='/vlm-api', $=id=>document.getElementById(id);
+let img=null, curJob=null, timer=null;
+
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  t.classList.add('on');
+  const n=t.dataset.tab;
+  $('single').classList.toggle('hidden', n!=='single');
+  $('batch').classList.toggle('hidden', n!=='batch');
+});
+
+fetch(A+'/health').then(r=>r.json()).then(d=>{
+  $('health').textContent='服务: '+d.status+' · '+(d.device||'')+(d.pool&&d.pool.length?' · 已加载 '+d.pool.length:'');
+  if(d.status==='ok'){$('go').disabled=false;$('startDir').disabled=false;$('startUp').disabled=false;}
+}).catch(()=>{$('health').textContent='服务不可达';});
+
+fetch(A+'/templates').then(r=>r.json()).then(d=>{
+  ['tpl1','tpl2'].forEach(id=>{
+    $(id).innerHTML=d.templates.map(t=>'<option value="'+t.id+'">'+t.name+'</option>').join('');
+  });
+});
+
+document.querySelectorAll('.tab').forEach((t,i)=>{ if(i===1){} });
+
+$('srcMode').onchange=e=>{
+  const dir=e.target.value==='dir';
+  $('dirRow').classList.toggle('hidden',!dir);
+  $('upRow').classList.toggle('hidden',dir);
+};
+
+$('file').onchange=e=>{
+  const f=e.target.files[0]; if(!f)return;
+  img=new Image();
+  img.onload=()=>{const c=$('cv');c.width=img.naturalWidth;c.height=img.naturalHeight;
+    c.getContext('2d').drawImage(img,0,0);
+    $('meta').textContent=img.naturalWidth+' × '+img.naturalHeight;
+    $('vlm').textContent='—';$('det').textContent='—';$('timing').textContent='';};
+  img.src=URL.createObjectURL(f);
+};
+
+$('go').onclick=async()=>{
+  const f=$('file').files[0]; if(!f)return;
+  $('go').disabled=true;$('go').textContent='分析中…';$('vlm').textContent='推理中…';
+  const fd=new FormData();fd.append('file',f);fd.append('template',$('tpl1').value);
+  try{
+    const t0=performance.now();
+    const r=await fetch(A+'/analyze',{method:'POST',body:fd});
+    const d=await r.json();const wall=Math.round(performance.now()-t0);
+    if(!r.ok){$('vlm').textContent='失败: '+JSON.stringify(d);return;}
+    draw(d);
+    $('vlm').textContent=d.reasoning && d.reasoning.text ? d.reasoning.text : '(该模板不做解释)';
+    const t=d.timings||{};
+    $('timing').textContent='检测 '+(t.detect_ms||0)+'ms · 分割 '+(t.segment_ms||0)+'ms · 解释 '+(t.reason_ms||0)+'ms · 总计 '+wall+'ms';
+    $('det').textContent=JSON.stringify({summary:d.summary,detections:d.detections},null,2);
+  }catch(e){$('vlm').textContent='请求失败: '+e;}
+  finally{$('go').disabled=false;$('go').textContent='分析';}
+};
+
+function draw(d){
+  if(!img)return;
+  const c=$('cv'),ctx=c.getContext('2d');
+  ctx.drawImage(img,0,0);
+  const cols=['#ff5c5c','#4dd2ff','#8aff5c','#ffd166','#c77dff'];
+  (d.detections||[]).forEach((it,i)=>{
+    const [x1,y1,x2,y2]=it.box,cl=cols[i%cols.length];
+    ctx.lineWidth=Math.max(2,c.width/400);ctx.strokeStyle=cl;
+    ctx.strokeRect(x1,y1,x2-x1,y2-y1);
+    ctx.font=Math.max(14,c.width/50)+'px sans-serif';
+    const lab=it.label+' '+it.conf.toFixed(2)+(it.mask_area_ratio!==undefined?' · '+(it.mask_area_ratio*100).toFixed(2)+'%':'');
+    const tw=ctx.measureText(lab).width;
+    ctx.fillStyle=cl;ctx.fillRect(x1,Math.max(0,y1-20),tw+8,20);
+    ctx.fillStyle='#0b0d12';ctx.fillText(lab,x1+4,Math.max(14,y1-5));
+  });
+}
+
+$('startDir').onclick=async()=>{
+  const dir=$('dir').value.trim(); if(!dir)return alert('填一个服务器目录');
+  const body={template:$('tpl2').value,dir:dir,limit:parseInt($('limit').value||'0'),save_images:$('saveImg').checked};
+  const r=await fetch(A+'/batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const d=await r.json();
+  if(!r.ok)return alert('失败: '+JSON.stringify(d));
+  watch(d.id);
+};
+
+$('startUp').onclick=async()=>{
+  const fs=$('upFiles').files; if(!fs.length)return alert('选文件');
+  const fd=new FormData();fd.append('template',$('tpl2').value);fd.append('save_images',$('saveImg2').checked?'true':'false');
+  for(const f of fs)fd.append('files',f);
+  $('startUp').disabled=true;$('startUp').textContent='上传中…';
+  try{
+    const r=await fetch(A+'/batch/upload',{method:'POST',body:fd});
+    const d=await r.json();
+    if(!r.ok)return alert('失败: '+JSON.stringify(d));
+    watch(d.id);
+  }finally{$('startUp').disabled=false;$('startUp').textContent='上传并跑批';}
+};
+
+function watch(id){
+  curJob=id; $('jobTitle').textContent='任务 '+id; $('csv').href=A+'/batch/'+id+'/export.csv';
+  if(timer)clearInterval(timer);
+  poll(); timer=setInterval(poll,1200);
+}
+async function poll(){
+  if(!curJob)return;
+  const d=await (await fetch(A+'/batch/'+curJob)).json();
+  if(d.detail){clearInterval(timer);return;}
+  const pct=d.total?Math.round(d.done*100/d.total):0;
+  $('prog').style.width=pct+'%';
+  $('jobState').textContent=d.status;
+  $('jobStat').textContent='进度 '+d.done+'/'+d.total+' · 有检出 '+d.detected+' · 失败 '+d.failed+' · 已用 '+d.elapsed_sec+'s'+(d.eta_sec?' · 预计剩余 '+d.eta_sec+'s':'');
+  if(d.status==='done'||d.status==='cancelled'||d.status==='error'){clearInterval(timer);loadItems();}
+  else if(d.done%5===0)loadItems();
+}
+async function loadItems(){
+  if(!curJob)return;
+  const d=await (await fetch(A+'/batch/'+curJob+'/items?limit=500')).json();
+  const tb=$('tbl').querySelector('tbody');
+  tb.innerHTML=(d.items||[]).map(r=>{
+    const s=r.summary||{},t=r.timings||{};
+    const ms=Object.entries(t).filter(([k])=>k.endsWith('_ms')).reduce((a,[,v])=>a+v,0);
+    return '<tr><td>'+(r.index+1)+'</td><td title="'+r.path+'">'+r.name+'</td>'+
+      '<td class="'+(r.ok?'ok':'bad')+'">'+(r.ok?'成功':'失败')+'</td>'+
+      '<td class="'+(s.count?'hit':'')+'">'+(s.count??'')+'</td>'+
+      '<td>'+(s.max_conf??'')+'</td><td>'+(s.mask_area_ratio_sum!==undefined?(s.mask_area_ratio_sum*100).toFixed(2)+'%':'')+'</td>'+
+      '<td title="'+((r.reasoning&&r.reasoning.text)||'')+'">'+((r.reasoning&&r.reasoning.text)||'').replace(/</g,'&lt;')+'</td>'+
+      '<td>'+(ms?ms+'ms':'')+'</td></tr>';
+  }).join('');
+}
+$('refresh').onclick=loadItems;
+$('cancel').onclick=async()=>{if(curJob)await fetch(A+'/batch/'+curJob+'/cancel',{method:'POST'});};
+</script>
+</body></html>
