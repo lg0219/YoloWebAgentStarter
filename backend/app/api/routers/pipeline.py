@@ -58,7 +58,7 @@ def jobs() -> Response:
 
 
 def _allowed_roots(settings: Settings) -> list[Path]:
-    roots = [settings.data_dir, settings.import_root]
+    roots = [settings.data_dir, settings.import_root, BRIDGE_JOBS_DIR]
     for extra in os.environ.get("YWA_PIPELINE_ROOTS", "").split(os.pathsep):
         if extra.strip():
             roots.append(Path(extra.strip()))
@@ -156,6 +156,27 @@ async def upload_batch(
 @router.get("/batch/{job_id}")
 def batch_status(job_id: str) -> Response:
     return _proxy("GET", f"/batch/{job_id}")
+
+
+@router.get("/batch/{job_id}/image/{name}")
+def batch_original_image(
+    job_id: str,
+    name: str,
+    settings: Settings = Depends(get_settings),
+) -> FileResponse:
+    """按批次明细里的文件名返回原图，供页面点击放大。"""
+    for item in _read_items(job_id):
+        if item.get("name") != name:
+            continue
+        candidate = Path(item.get("path") or "")
+        if not candidate.is_file():
+            raise NotFoundError("image_missing", "原图不存在")
+        resolved = candidate.resolve()
+        for root in _allowed_roots(settings):
+            if resolved == root or root in resolved.parents:
+                return FileResponse(resolved)
+        raise ValidationError("path_not_allowed", "图片不在允许目录内")
+    raise NotFoundError("item_not_found", "批次中没有该图片")
 
 
 @router.get("/batch/{job_id}/items")

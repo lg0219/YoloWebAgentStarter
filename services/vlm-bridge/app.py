@@ -210,7 +210,11 @@ def run_pipeline(image, template_id, prompt_override="", save_path=None):
             timings["segment_error"] = traceback.format_exc(limit=1)
         timings["segment_ms"] = int((time.time() - t1) * 1000)
 
-    if "reason" in stages:
+    skip_reason = ("detect" in stages) and not detections
+    if "reason" in stages and skip_reason:
+        vlm_text = "未检出目标，未调用 VLM"
+        timings["reason_ms"] = 0
+    elif "reason" in stages:
         spec = stages["reason"]
         net = get_model(spec["model"])
         question = prompt_override.strip() or spec.get("prompt", "").strip()

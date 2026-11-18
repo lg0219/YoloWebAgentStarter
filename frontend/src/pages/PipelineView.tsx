@@ -359,7 +359,14 @@ export function PipelineView() {
                   <tr key={item.index} style={{ borderTop: "1px solid #e8edf4" }}>
                     <td style={{ padding: "6px 10px" }}>{item.index + 1}</td>
                     <td style={{ padding: "6px 10px", maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.path}>
-                      {item.name}
+                      <a
+                        href={apiUrl("/api/pipeline/batch/" + job!.id + "/image/" + encodeURIComponent(item.name))}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: "#1d4ed8", textDecoration: "underline" }}
+                      >
+                        {item.name}
+                      </a>
                     </td>
                     <td style={{ padding: "6px 10px", color: item.ok ? "#15803d" : "#b91c1c" }}>{item.ok ? "成功" : "失败"}</td>
                     <td style={{ padding: "6px 10px", color: summary && summary.count ? "#b45309" : undefined }}>{summary ? summary.count : ""}</td>
