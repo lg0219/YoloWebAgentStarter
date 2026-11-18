@@ -360,7 +360,7 @@ export function PipelineView() {
                     <td style={{ padding: "6px 10px" }}>{item.index + 1}</td>
                     <td style={{ padding: "6px 10px", maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.path}>
                       <a
-                        href={apiUrl("/api/pipeline/batch/" + job!.id + "/image/" + encodeURIComponent(item.name))}
+                        href={apiUrl("/api/pipeline/viewer?job=" + job!.id + "&name=" + encodeURIComponent(item.name))}
                         target="_blank"
                         rel="noreferrer"
                         style={{ color: "#1d4ed8", textDecoration: "underline" }}

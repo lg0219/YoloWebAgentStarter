@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>原图预览</title>
+<style>
+html,body{margin:0;height:100%;background:#0f1115;color:#e6e8ee;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+#bar{position:fixed;top:0;left:0;right:0;height:44px;display:flex;gap:12px;align-items:center;padding:0 14px;background:#151821;border-bottom:1px solid #23262e;font-size:13px;z-index:10}
+#bar button{background:#232936;color:#e6e8ee;border:1px solid #2a2f3a;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer}
+#box{position:absolute;top:44px;left:0;right:0;bottom:0;overflow:auto;cursor:grab}
+#inner{position:relative;transform-origin:0 0}
+#pi{display:block;max-width:none}
+canvas{position:absolute;inset:0;pointer-events:none}
+.hint{color:#9aa3b2;font-size:12px}
+</style></head>
+<body>
+<div id="bar">
+  <strong id="name">—</strong>
+  <button id="out">−</button><span id="zl">100%</span><button id="in">+</button>
+  <button id="fit">适应窗口</button><button id="one">100%</button>
+  <span class="hint">滚轮缩放 · 拖拽平移 · 双击放大</span>
+</div>
+<div id="box"><div id="inner"><img id="pi" alt=""><canvas id="cv"></canvas></div></div>
+<script>
+const q = new URLSearchParams(location.search);
+const job = q.get('job') || '', name = q.get('name') || '';
+const inner = document.getElementById('inner'), pi = document.getElementById('pi'),
+      cv = document.getElementById('cv'), box = document.getElementById('box'), zl = document.getElementById('zl');
+let scale = 1, boxes = [], nat = {w:0,h:0};
+document.getElementById('name').textContent = name;
+
+const src = '/api/pipeline/batch/' + job + '/image/' + encodeURIComponent(name);
+const base = location.pathname.replace(/\/api\/pipeline\/viewer$/, '');
+pi.src = base + '/api/pipeline/batch/' + job + '/image/' + encodeURIComponent(name);
+
+pi.onload = () => {
+  nat = { w: pi.naturalWidth, h: pi.naturalHeight };
+  inner.style.width = nat.w + 'px'; inner.style.height = nat.h + 'px';
+  cv.width = nat.w; cv.height = nat.h;
+  cv.style.width = nat.w + 'px'; cv.style.height = nat.h + 'px';
+  fit(); paint();
+};
+function fit(){
+  const aw = box.clientWidth - 24, ah = box.clientHeight - 24;
+  if(!nat.w) return;
+  scale = Math.min(1, Math.min(aw / nat.w, ah / nat.h));
+  apply();
+}
+function apply(){
+  inner.style.transform = 'scale(' + scale + ')';
+  zl.textContent = Math.round(scale * 100) + '%';
+}
+function zoom(f, cx, cy){
+  const next = Math.min(8, Math.max(0.05, scale * f));
+  const rect = inner.getBoundingClientRect();
+  const ox = cx - rect.left, oy = cy - rect.top;
+  scale = next; apply();
+  const rect2 = inner.getBoundingClientRect();
+  box.scrollLeft += (rect2.left + ox * (next / (rect2.width / inner.offsetWidth) || 1)) - cx;
+  box.scrollTop += (rect2.top - rect.top) + (oy * (next / scale || 1));
+}
+function paint(){
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.lineWidth = Math.max(2, nat.w / 400);
+  ctx.strokeStyle = '#ff5c5c';
+  boxes.forEach((b) => { ctx.strokeRect(b[0], b[1], b[2] - b[0], b[3] - b[1]); });
+}
+document.getElementById('in').onclick = () => zoom(1.25, inner.getBoundingClientRect().left + 10, inner.getBoundingClientRect().top + 10);
+document.getElementById('out').onclick = () => zoom(0.8, inner.getBoundingClientRect().left + 10, inner.getBoundingClientRect().top + 10);
+document.getElementById('fit').onclick = fit;
+document.getElementById('one').onclick = () => { scale = 1; apply(); };
+box.addEventListener('wheel', (e) => { e.preventDefault(); zoom(e.deltaY < 0 ? 1.12 : 0.9, e.clientX, e.clientY); }, { passive: false });
+let drag = null;
+box.addEventListener('mousedown', (e) => { drag = { x: e.clientX, y: e.clientY, l: box.scrollLeft, t: box.scrollTop }; box.style.cursor = 'grabbing'; });
+window.addEventListener('mouseup', () => { drag = null; box.style.cursor = 'grab'; });
+window.addEventListener('mousemove', (e) => { if(!drag) return; box.scrollLeft = drag.l - (e.clientX - drag.x); box.scrollTop = drag.t - (e.clientY - drag.y); });
+box.addEventListener('dblclick', (e) => zoom(1.6, e.clientX, e.clientY));
+
+fetch(base + '/api/pipeline/batch/' + job + '/items?limit=1000')
+  .then((r) => r.json())
+  .then((d) => {
+    const hit = (d.items || []).find((x) => x.name === name);
+    if (hit) document.getElementById('name').textContent = name + ' · 检出 ' + ((hit.summary || {}).count || 0);
+  })
+  .catch(() => undefined);
+</script>
+</body></html>

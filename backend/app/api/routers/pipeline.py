@@ -292,3 +292,13 @@ def batch_report(job_id: str) -> dict:
             f"| {index} | {item.get('name')} | {summary.get('max_conf')} | {ratio_text} | {text} |"
         )
     return {"job_id": job_id, "stats": stats, "markdown": "\n".join(lines)}
+
+
+VIEWER_FILE = Path(__file__).with_name("pipeline_viewer.html")
+
+
+@router.get("/viewer")
+def viewer() -> FileResponse:
+    """原图查看器：支持缩放/拖拽，叠加检测框。"""
+    return FileResponse(VIEWER_FILE, media_type="text/html; charset=utf-8")
+
