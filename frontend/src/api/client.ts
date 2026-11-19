@@ -32,6 +32,8 @@ import type {
   PipelineSettingsUpdate,
   RuntimeSettings,
   DeploymentInfo,
+  WeightStatus,
+  WeightDownloadState,
 } from "../types";
 
 import { apiUrl } from "./runtimeConfig";
@@ -218,4 +220,9 @@ export const api = {
     request<RuntimeSettings>("/api/settings/runtime", json(payload, "PUT")),
   // （lg0219）部署信息：只读
   getDeploymentInfo: () => request<DeploymentInfo>("/api/settings/deployment"),
+  // （lg0219）预训练权重：训练前必须先下载
+  getWeightStatus: (model: string) =>
+    request<WeightStatus>(`/api/training/weights/status?model=${encodeURIComponent(model)}`),
+  startWeightDownload: (model: string) =>
+    request<WeightDownloadState>("/api/training/weights/download", json({ model })),
 };

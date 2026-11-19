@@ -532,3 +532,22 @@ export interface DeploymentItem {
 export interface DeploymentInfo {
   items: DeploymentItem[];
 }
+
+// （lg0219）预训练权重：状态与下载进度
+export interface WeightDownloadState {
+  status: "idle" | "downloading" | "ready" | "failed";
+  downloaded: number;
+  total: number;
+  percent: number;
+  error: string | null;
+  url?: string;
+}
+
+export interface WeightStatus {
+  name: string;
+  ready: boolean;
+  kind: "asset" | "file" | "url";
+  path: string;
+  size_bytes: number | null;
+  download: WeightDownloadState;
+}

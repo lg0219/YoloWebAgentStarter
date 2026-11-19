@@ -1,5 +1,6 @@
-import { useId, type FormEvent } from "react";
-import type { Dataset, TaskType } from "../../types";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import type { Dataset, TaskType, WeightStatus } from "../../types";
+import { api } from "../../api/client";
 import {
   BATCH_OPTIONS,
   IMG_SIZE_OPTIONS,
@@ -56,6 +57,74 @@ export function TrainingConfigPanel({
   const modelChoices = modelChoicesFor(dataset.task_type);
   const modelInList = modelChoices.some((item) => item.value === form.model);
   const taskMeta = TASK_META[dataset.task_type];
+
+  // （lg0219）预训练权重：训练前必须先下载；未就绪时不允许开始训练
+  const [weight, setWeight] = useState<WeightStatus | null>(null);
+  const [weightBusy, setWeightBusy] = useState(false);
+  const [weightError, setWeightError] = useState("");
+  const pollTimer = useRef<number | null>(null);
+
+  const stopPolling = () => {
+    if (pollTimer.current) {
+      window.clearInterval(pollTimer.current);
+      pollTimer.current = null;
+    }
+  };
+
+  const refreshWeight = async (model: string) => {
+    try {
+      const status = await api.getWeightStatus(model);
+      setWeight(status);
+      if (status.download.status === "downloading") {
+        stopPolling();
+        pollTimer.current = window.setInterval(async () => {
+          try {
+            const next = await api.getWeightStatus(model);
+            setWeight(next);
+            if (next.download.status !== "downloading") stopPolling();
+          } catch {
+            stopPolling();
+          }
+        }, 1000);
+      } else {
+        stopPolling();
+      }
+    } catch (reason) {
+      setWeightError(reason instanceof Error ? reason.message : "权重状态查询失败");
+    }
+  };
+
+  useEffect(() => {
+    setWeight(null);
+    setWeightError("");
+    void refreshWeight(form.model);
+    return stopPolling;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.model]);
+
+  const downloadWeight = async () => {
+    setWeightBusy(true);
+    setWeightError("");
+    try {
+      const state = await api.startWeightDownload(form.model);
+      setWeight((prev) => (prev ? { ...prev, download: state } : prev));
+      await refreshWeight(form.model);
+    } catch (reason) {
+      setWeightError(reason instanceof Error ? reason.message : "下载失败");
+    } finally {
+      setWeightBusy(false);
+    }
+  };
+
+  const guardSubmit = (event: FormEvent) => {
+    if (!weight?.ready) {
+      event.preventDefault();
+      setWeightError("模型权重未下载，请先下载！");
+      return;
+    }
+    setWeightError("");
+    onSubmit(event);
+  };
   // 2026-11-05：字段不再整行包 <label>（整行可点、焦点区过大），
   // 改为显式 htmlFor/id 关联，? 帮助图标独立成行内唯一特殊交互点。
   const fieldId = (name: string) => `training-field-${name}-${useId().replace(/:/g, "")}`;
@@ -83,7 +152,7 @@ export function TrainingConfigPanel({
         </div>
       </div>
 
-      <form id="dataset-training-ws-form" className="training-ws-form" onSubmit={onSubmit}>
+      <form id="dataset-training-ws-form" className="training-ws-form" onSubmit={guardSubmit}>
         <section className="training-config-block">
           <div className="training-config-block-head">
             <h3>数据集与任务</h3>
@@ -203,6 +272,31 @@ export function TrainingConfigPanel({
                 ))}
                 {!modelInList && <option value="__custom__">{form.model}</option>}
               </select>
+              {/* （lg0219）权重必须先下载；下载中/已就绪时按钮置灰，切换权重后重新判断 */}
+              <div className="training-weight-actions">
+                <button
+                  type="button"
+                  className="button"
+                  disabled={weightBusy || !weight || weight.ready || weight.download.status === "downloading"}
+                  onClick={() => void downloadWeight()}
+                >
+                  {weight?.download.status === "downloading"
+                    ? `下载中 ${weight.download.percent.toFixed(1)}%`
+                    : weight?.ready
+                      ? "已下载"
+                      : weightBusy
+                        ? "准备中…"
+                        : "下载权重"}
+                </button>
+                <small className={`training-weight-state${weight?.ready ? " ready" : ""}`}>
+                  {weight?.ready
+                    ? "本地已就绪，可直接训练"
+                    : weight?.download.status === "failed"
+                      ? `下载失败：${weight.download.error ?? "未知原因"}`
+                      : "尚未下载，请先点击下载"}
+                </small>
+              </div>
+              {weightError ? <small className="annotation-form-error">{weightError}</small> : null}
             </div>
             {!modelInList && (
               <div className="training-ws-field training-ws-field-wide">
@@ -239,7 +333,7 @@ export function TrainingConfigPanel({
             </div>
           </div>
           <p className="tcc-model-hint training-ws-field-wide" role="note">
-            首次使用 {form.model} 时，Ultralytics 可能下载对应权重。请确认适用许可后再训练。
+            训练前必须先把 {form.model} 下载到本地。点击上方「下载权重」，完成后按钮置灰；切换权重会重新判断是否已下载。请确认适用许可后再训练。
           </p>
         </section>
 

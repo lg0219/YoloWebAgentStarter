@@ -2416,3 +2416,25 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* （lg0219）预训练权重：下载按钮与状态提示 */
+.training-weight-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.training-weight-actions .button {
+  min-width: 104px;
+}
+
+.training-weight-state {
+  color: #8a93a6;
+  font-size: 12px;
+}
+
+.training-weight-state.ready {
+  color: #2f855a;
+}
