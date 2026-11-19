@@ -489,3 +489,42 @@ export interface AgentProviderStatus {
   max_tool_rounds: number;
   approval_ttl_seconds: number;
 }
+
+// （lg0219）智能分析：云端解释配置（可选，只作用于「解释」阶段）
+export interface PipelineSettings {
+  cloud_enabled: boolean;
+  api_base: string;
+  model: string;
+  api_key_configured: boolean;
+  timeout_seconds: number;
+  max_tokens: number;
+}
+
+export interface PipelineSettingsUpdate {
+  cloud_enabled: boolean;
+  api_base: string;
+  model: string;
+  api_key?: string;
+  timeout_seconds: number;
+  max_tokens: number;
+}
+
+// （lg0219）运行参数：保存后即时生效
+export interface RuntimeSettings {
+  yolo_executable: string;
+  max_upload_mb: number;
+  max_video_upload_mb: number;
+  max_video_duration_seconds: number;
+}
+
+// （lg0219）部署信息：只读
+export interface DeploymentItem {
+  key: string;
+  label: string;
+  value: string;
+  note: string;
+}
+
+export interface DeploymentInfo {
+  items: DeploymentItem[];
+}

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, File, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_evaluation_runner, get_session, get_settings, get_storage
+from app.api.dependencies import get_effective_settings, get_evaluation_runner, get_session, get_settings, get_storage
 from app.core.config import Settings
 from app.core.errors import ValidationError
 from app.core.storage import Storage
@@ -104,7 +104,7 @@ async def test_model(
     iou: float = Query(default=0.45, ge=0, le=1),
     session: Session = Depends(get_session),
     storage: Storage = Depends(get_storage),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_effective_settings),
 ) -> InferenceResult:
     image_bytes = await file.read(settings.max_upload_bytes + 1)
     if len(image_bytes) > settings.max_upload_bytes:

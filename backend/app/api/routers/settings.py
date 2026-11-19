@@ -7,10 +7,15 @@ from app.core.config import Settings
 from app.settings.schemas import (
     AnnotationSettingsResponse,
     AnnotationSettingsUpdate,
+    DeploymentInfoResponse,
     LLMConnectionTestRequest,
     LLMConnectionTestResult,
     LLMSettingsOut,
     LLMSettingsUpdate,
+    PipelineSettingsOut,
+    PipelineSettingsUpdate,
+    RuntimeSettingsOut,
+    RuntimeSettingsUpdate,
     SamSettingsResponse,
     SamSettingsUpdate,
 )
@@ -57,3 +62,37 @@ def test_llm_connection(
     settings: Settings = Depends(get_settings),
 ) -> LLMConnectionTestResult:
     return SettingsService(settings).test_llm_connection(payload)
+
+
+# （lg0219）智能分析：云端解释配置（可选，只作用于「解释」阶段）
+@router.get("/pipeline", response_model=PipelineSettingsOut)
+def get_pipeline_settings(settings: Settings = Depends(get_settings)) -> PipelineSettingsOut:
+    return SettingsService(settings).get_pipeline_settings()
+
+
+@router.put("/pipeline", response_model=PipelineSettingsOut)
+def update_pipeline_settings(
+    payload: PipelineSettingsUpdate,
+    settings: Settings = Depends(get_settings),
+) -> PipelineSettingsOut:
+    return SettingsService(settings).update_pipeline_settings(payload)
+
+
+# （lg0219）运行参数：保存后即时生效
+@router.get("/runtime", response_model=RuntimeSettingsOut)
+def get_runtime_settings(settings: Settings = Depends(get_settings)) -> RuntimeSettingsOut:
+    return SettingsService(settings).get_runtime_settings()
+
+
+@router.put("/runtime", response_model=RuntimeSettingsOut)
+def update_runtime_settings(
+    payload: RuntimeSettingsUpdate,
+    settings: Settings = Depends(get_settings),
+) -> RuntimeSettingsOut:
+    return SettingsService(settings).update_runtime_settings(payload)
+
+
+# （lg0219）部署信息：只读
+@router.get("/deployment", response_model=DeploymentInfoResponse)
+def get_deployment_info(settings: Settings = Depends(get_settings)) -> DeploymentInfoResponse:
+    return SettingsService(settings).deployment_info()

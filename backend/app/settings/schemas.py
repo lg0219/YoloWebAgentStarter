@@ -83,3 +83,50 @@ class LLMConnectionTestResult(BaseModel):
 
 class LLMSettingsInternal(LLMSettingsOut):
     api_key: str = ""
+
+
+# （lg0219）智能分析（vlm-bridge）云端解释配置。
+# 只作用于流水线的「解释」阶段；未启用时仍使用本地模型，行为不变。
+class PipelineSettingsOut(BaseModel):
+    cloud_enabled: bool = False
+    api_base: str = ""
+    model: str = ""
+    api_key_configured: bool = False
+    timeout_seconds: int = 60
+    max_tokens: int = 256
+
+
+class PipelineSettingsUpdate(BaseModel):
+    cloud_enabled: bool = False
+    api_base: str = Field(default="", max_length=1024)
+    model: str = Field(default="", max_length=256)
+    api_key: str | None = Field(default=None, description="留空表示沿用已保存的密钥。")
+    timeout_seconds: int = Field(default=60, ge=5, le=600)
+    max_tokens: int = Field(default=256, ge=32, le=4096)
+
+
+# （lg0219）运行参数：保存后立即生效，不影响监听地址等启动参数。
+class RuntimeSettingsOut(BaseModel):
+    yolo_executable: str = ""
+    max_upload_mb: int = 50
+    max_video_upload_mb: int = 2048
+    max_video_duration_seconds: int = 14400
+
+
+class RuntimeSettingsUpdate(BaseModel):
+    yolo_executable: str = Field(default="", max_length=1024)
+    max_upload_mb: int = Field(default=50, ge=1, le=4096)
+    max_video_upload_mb: int = Field(default=2048, ge=1, le=102400)
+    max_video_duration_seconds: int = Field(default=14400, ge=10, le=86400)
+
+
+# （lg0219）部署信息：只读，来自进程启动时的环境变量，界面仅展示。
+class DeploymentItem(BaseModel):
+    key: str
+    label: str
+    value: str
+    note: str = ""
+
+
+class DeploymentInfoResponse(BaseModel):
+    items: list[DeploymentItem]
