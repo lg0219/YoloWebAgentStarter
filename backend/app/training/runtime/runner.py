@@ -36,6 +36,53 @@ def _configured_yolo_executable() -> str:
         return ""
 
 
+# （lg0219）预训练权重下载源：镜像只是加速通道，文件仍来自官方仓库
+_MODEL_MIRRORS = {
+    "ghfast": "https://ghfast.top",
+    "gh-proxy": "https://gh-proxy.com",
+    "ghproxy-net": "https://ghproxy.net",
+}
+_OFFICIAL_ASSET_BASE = "https://github.com/ultralytics/assets/releases/download/v0.0.0"
+
+
+def _read_runtime_section(data_dir: Path) -> dict:
+    try:
+        path = data_dir / "settings.json"
+        if not path.is_file():
+            return {}
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data.get("runtime") or {}
+    except Exception:
+        return {}
+
+
+def apply_model_source(args: list[str], data_dir: Path) -> list[str]:
+    """按设置把裸权重名改写成镜像 URL，交由 Ultralytics 从该地址下载。
+
+    仅作用于 `model=xxx.pt` 的裸文件名；本地路径、已有 URL、.yaml 一律原样保留。
+    """
+    runtime = _read_runtime_section(data_dir)
+    source = str(runtime.get("model_source") or "official").strip()
+    if source in ("", "official"):
+        return args
+    if source == "custom":
+        prefix = str(runtime.get("model_source_custom") or "").strip()
+    else:
+        prefix = _MODEL_MIRRORS.get(source, "")
+    if not prefix:
+        return args
+    prefix = prefix.rstrip("/")
+    rewritten: list[str] = []
+    for arg in args:
+        if arg.startswith("model=") and arg.endswith(".pt"):
+            name = arg[len("model="):]
+            if not name.startswith(("http://", "https://")) and "/" not in name and "\\" not in name:
+                rewritten.append(f"model={prefix}/{_OFFICIAL_ASSET_BASE}/{name}")
+                continue
+        rewritten.append(arg)
+    return rewritten
+
+
 def resolve_yolo_command_prefix() -> list[str]:
     override = os.getenv("YWA_YOLO_EXECUTABLE", "").strip()
     if override:
@@ -130,7 +177,9 @@ class TrainingRunner:
         if not args:
             raise RuntimeError("Training command is missing.")
         if args[0] == "yolo":
-            return [*resolve_yolo_command_prefix(), *args[1:]]
+            command = [*resolve_yolo_command_prefix(), *args[1:]]
+            data_dir = self.storage.data_dir if self.storage else Path(".")
+            return apply_model_source(command, data_dir)
         return args
 
     def _stop_requested(self, task_id: str) -> bool:

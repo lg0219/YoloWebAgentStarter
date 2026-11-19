@@ -517,6 +517,8 @@ export interface RuntimeSettings {
   max_upload_mb: number;
   max_video_upload_mb: number;
   max_video_duration_seconds: number;
+  model_source: string;
+  model_source_custom: string;
 }
 
 // （lg0219）部署信息：只读

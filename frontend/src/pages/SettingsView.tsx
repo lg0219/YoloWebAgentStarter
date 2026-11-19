@@ -111,6 +111,15 @@ const copy = {
     maxUpload: "单次上传上限（MB）",
     maxVideoUpload: "视频上传上限（MB）",
     maxVideoDuration: "视频时长上限（秒）",
+    modelSource: "权重下载源",
+    modelSourceHint: "训练首次使用某个预训练权重时会从 GitHub 下载，国内常卡住。镜像只是加速通道，文件仍来自官方仓库；镜像失效时切回官方或改自定义。",
+    modelSourceCustom: "自定义前缀",
+    modelSourceCustomHint: "填完整前缀并保留结尾斜杠，例如 https://你的镜像/ ；程序会拼成「前缀 + https://github.com/...」。",
+    sourceOfficial: "官方 GitHub",
+    sourceGhfast: "镜像 ghfast.top（快）",
+    sourceGhProxy: "镜像 gh-proxy.com（快）",
+    sourceGhproxyNet: "镜像 ghproxy.net（较慢）",
+    sourceCustom: "自定义",
     saveRuntime: "保存运行参数",
     savedRuntime: "运行参数已保存",
     deploymentTitle: "部署信息",
@@ -232,6 +241,15 @@ const copy = {
     maxUpload: "Single upload limit (MB)",
     maxVideoUpload: "Video upload limit (MB)",
     maxVideoDuration: "Video duration limit (seconds)",
+    modelSource: "Weight download source",
+    modelSourceHint: "The first training run downloads pretrained weights from GitHub, which is unreliable in some networks. Mirrors are only accelerators; files still come from the official repository. Switch back to official if a mirror fails.",
+    modelSourceCustom: "Custom prefix",
+    modelSourceCustomHint: "Full prefix with trailing slash, e.g. https://your-mirror/ ; it is joined as prefix + https://github.com/...",
+    sourceOfficial: "Official GitHub",
+    sourceGhfast: "Mirror ghfast.top (fast)",
+    sourceGhProxy: "Mirror gh-proxy.com (fast)",
+    sourceGhproxyNet: "Mirror ghproxy.net (slower)",
+    sourceCustom: "Custom",
     saveRuntime: "Save runtime settings",
     savedRuntime: "Runtime settings saved",
     deploymentTitle: "Deployment info",
@@ -1186,6 +1204,31 @@ function RuntimeSettingsPanel({ text }: { locale: AppLocale; text: SettingsText 
               }
             />
           </label>
+          <label>
+            <span>{text.modelSource}</span>
+            <select
+              value={settings.model_source}
+              onChange={(event) => setSettings({ ...settings, model_source: event.target.value })}
+            >
+              <option value="official">{text.sourceOfficial}</option>
+              <option value="ghfast">{text.sourceGhfast}</option>
+              <option value="gh-proxy">{text.sourceGhProxy}</option>
+              <option value="ghproxy-net">{text.sourceGhproxyNet}</option>
+              <option value="custom">{text.sourceCustom}</option>
+            </select>
+            <small>{text.modelSourceHint}</small>
+          </label>
+          {settings.model_source === "custom" ? (
+            <label>
+              <span>{text.modelSourceCustom}</span>
+              <input
+                value={settings.model_source_custom}
+                placeholder="https://your-mirror/"
+                onChange={(event) => setSettings({ ...settings, model_source_custom: event.target.value })}
+              />
+              <small>{text.modelSourceCustomHint}</small>
+            </label>
+          ) : null}
         </div>
         <button type="submit" className="button primary" disabled={saving}>
           {saving ? "…" : text.saveRuntime}

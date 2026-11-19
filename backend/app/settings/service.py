@@ -294,6 +294,8 @@ class SettingsService:
             max_video_duration_seconds=int(
                 section.get("max_video_duration_seconds", self.settings.max_video_duration_seconds)
             ),
+            model_source=str(section.get("model_source", "official") or "official").strip(),
+            model_source_custom=str(section.get("model_source_custom", "")).strip(),
         )
 
     def update_runtime_settings(self, payload: RuntimeSettingsUpdate) -> RuntimeSettingsOut:
@@ -303,6 +305,8 @@ class SettingsService:
         section["max_upload_mb"] = payload.max_upload_mb
         section["max_video_upload_mb"] = payload.max_video_upload_mb
         section["max_video_duration_seconds"] = payload.max_video_duration_seconds
+        section["model_source"] = payload.model_source.strip() or "official"
+        section["model_source_custom"] = payload.model_source_custom.strip()
         data["runtime"] = section
         self._write(data)
         return self.get_runtime_settings()

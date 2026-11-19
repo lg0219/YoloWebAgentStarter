@@ -114,6 +114,9 @@ class RuntimeSettingsOut(BaseModel):
     max_upload_mb: int = 50
     max_video_upload_mb: int = 2048
     max_video_duration_seconds: int = 14400
+    # （lg0219）预训练权重下载源：official / ghfast / gh-proxy / ghproxy-net / custom
+    model_source: str = "official"
+    model_source_custom: str = ""
 
 
 class RuntimeSettingsUpdate(BaseModel):
@@ -121,6 +124,8 @@ class RuntimeSettingsUpdate(BaseModel):
     max_upload_mb: int = Field(default=50, ge=1, le=4096)
     max_video_upload_mb: int = Field(default=2048, ge=1, le=102400)
     max_video_duration_seconds: int = Field(default=14400, ge=10, le=86400)
+    model_source: str = Field(default="official", max_length=32)
+    model_source_custom: str = Field(default="", max_length=512)
 
 
 # （lg0219）部署信息：只读，来自进程启动时的环境变量，界面仅展示。
