@@ -30,11 +30,9 @@ import type {
   ValidationReport,
 } from "../types";
 
-const API_BASE = (import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000").replace(/\/$/, "");
+import { apiUrl } from "./runtimeConfig";
 
-export function apiUrl(path: string): string {
-  return `${API_BASE}${path}`;
-}
+export { apiUrl };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(apiUrl(path), init);
