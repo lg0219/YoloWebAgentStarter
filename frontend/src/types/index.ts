@@ -492,6 +492,7 @@ export interface AgentProviderStatus {
 
 // （lg0219）智能分析：云端解释配置（可选，只作用于「解释」阶段）
 export interface PipelineSettings {
+  enabled: boolean;
   cloud_enabled: boolean;
   api_base: string;
   model: string;
@@ -501,6 +502,7 @@ export interface PipelineSettings {
 }
 
 export interface PipelineSettingsUpdate {
+  enabled: boolean;
   cloud_enabled: boolean;
   api_base: string;
   model: string;

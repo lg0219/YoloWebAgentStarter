@@ -38,6 +38,8 @@ export default function App() {
   const [locale, setLocale] = useState<AppLocale>(() => readLocale());
   // 2026-11-06 新增：顶部品牌区显示开关（本机浏览器，见设置页「通用设置」）
   const [showBrandBar, setShowBrandBar] = useState<boolean>(() => readBrandBar());
+  // 2026-11-19 新增：智能分析入口开关，默认关闭；在「设置 → 智能分析」中开启
+  const [pipelineEnabled, setPipelineEnabled] = useState<boolean>(false);
   const [annotationDirty, setAnnotationDirty] = useState(false);
   const [focusTrainingTaskId, setFocusTrainingTaskId] = useState<string>();
   const [focusModelId, setFocusModelId] = useState<string>();
@@ -102,6 +104,16 @@ export default function App() {
   useEffect(() => {
     refreshDatasets().catch((reason: unknown) => setError(errorMessage(reason)));
     api.getSystemInfo().then((info) => setSamCapabilities(info.sam)).catch((reason: unknown) => setError(errorMessage(reason)));
+    api.getPipelineSettings()
+      .then((settings) => setPipelineEnabled(settings.enabled))
+      .catch(() => setPipelineEnabled(false));
+    const onPipelineSettings = () => {
+      api.getPipelineSettings()
+        .then((settings) => setPipelineEnabled(settings.enabled))
+        .catch(() => undefined);
+    };
+    window.addEventListener("pipeline-settings-changed", onPipelineSettings);
+    return () => window.removeEventListener("pipeline-settings-changed", onPipelineSettings);
   }, []);
 
   const run = async (action: () => Promise<void>) => {
@@ -256,7 +268,7 @@ export default function App() {
   };
 
   return (
-    <StarterShell active={activeSection} datasetName={selected?.name} onNavigate={navigate} locale={locale} showBrandBar={showBrandBar}>
+    <StarterShell active={activeSection} datasetName={selected?.name} onNavigate={navigate} locale={locale} showBrandBar={showBrandBar} showPipeline={pipelineEnabled}>
       {error && <div className="toast error">{error}</div>}
       {notice && <div className="toast success">{notice}</div>}
       {leaveDialog}
@@ -328,7 +340,7 @@ export default function App() {
             api.getSystemInfo().then((info) => setSamCapabilities(info.sam)).catch(() => undefined);
           }}
         />
-      ) : view === "pipeline" ? (
+      ) : view === "pipeline" && pipelineEnabled ? (
         <PipelineView />
       ) : view === "logs" ? (
         <LogsView locale={locale} />

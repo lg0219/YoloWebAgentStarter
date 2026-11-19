@@ -88,6 +88,8 @@ class LLMSettingsInternal(LLMSettingsOut):
 # （lg0219）智能分析（vlm-bridge）云端解释配置。
 # 只作用于流水线的「解释」阶段；未启用时仍使用本地模型，行为不变。
 class PipelineSettingsOut(BaseModel):
+    # 默认关闭：未部署 vlm-bridge 时不显示「智能分析」入口，也不产生健康检查请求
+    enabled: bool = False
     cloud_enabled: bool = False
     api_base: str = ""
     model: str = ""
@@ -97,6 +99,7 @@ class PipelineSettingsOut(BaseModel):
 
 
 class PipelineSettingsUpdate(BaseModel):
+    enabled: bool = False
     cloud_enabled: bool = False
     api_base: str = Field(default="", max_length=1024)
     model: str = Field(default="", max_length=256)

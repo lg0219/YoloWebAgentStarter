@@ -11,6 +11,8 @@ interface Props {
   locale?: AppLocale;
   // 2026-11-06 新增：顶部品牌区显示开关，false 时整行不渲染（见「通用设置」）
   showBrandBar?: boolean;
+  // 2026-11-19 新增：智能分析入口开关，默认关闭（未部署 vlm-bridge 时不显示）
+  showPipeline?: boolean;
   children: ReactNode;
 }
 
@@ -28,7 +30,7 @@ const navigation: Array<{ id: StarterSection; label: string; icon: ReactNode }> 
  * 社区版工作台外壳。视觉和信息层级参考 YoloWebAgent。
  * Agent MVP 为本地只读助手 + 人工确认提交；不含 Workflow / 无人值守入口。
  */
-export function StarterShell({ active, datasetName, onNavigate, locale = "zh", showBrandBar = true, children }: Props) {
+export function StarterShell({ active, datasetName, onNavigate, locale = "zh", showBrandBar = true, showPipeline = false, children }: Props) {
   const text = localeText[locale];
   const labels: Record<StarterSection, string> = {
     workspace: text.datasets,
@@ -39,6 +41,11 @@ export function StarterShell({ active, datasetName, onNavigate, locale = "zh", s
     settings: text.settingsGroup,
     logs: text.logs,
   };
+  // 智能分析未启用时不显示入口；分组仍按原样（前五项为主分组，末尾为设置分组）
+  const visibleNavigation = navigation.filter((item) => showPipeline || item.id !== "pipeline");
+  const footerIds = new Set<StarterSection>(["logs", "settings"]);
+  const primaryNavigation = visibleNavigation.filter((item) => !footerIds.has(item.id));
+  const footerNavigation = visibleNavigation.filter((item) => footerIds.has(item.id));
   return (
     <div className={`starter-shell${showBrandBar ? "" : " starter-shell-no-brandbar"}`}>
       {showBrandBar && (
@@ -61,9 +68,9 @@ export function StarterShell({ active, datasetName, onNavigate, locale = "zh", s
           </div>
           <nav className="starter-menu" aria-label={text.mainNav}>
             <span className="starter-menu-group-label">{text.workspaceGroup}</span>
-            {navigation.slice(0, 5).map((item) => <NavigationButton key={item.id} item={item} active={active} labels={labels} onNavigate={onNavigate} />)}
+            {primaryNavigation.map((item) => <NavigationButton key={item.id} item={item} active={active} labels={labels} onNavigate={onNavigate} />)}
             <span className="starter-menu-group-label">{text.settingsGroup}</span>
-            {navigation.slice(5).map((item) => <NavigationButton key={item.id} item={item} active={active} labels={labels} onNavigate={onNavigate} />)}
+            {footerNavigation.map((item) => <NavigationButton key={item.id} item={item} active={active} labels={labels} onNavigate={onNavigate} />)}
           </nav>
           <div className="starter-sidebar-note">
             <strong>{text.sidebarNoteTitle}</strong>

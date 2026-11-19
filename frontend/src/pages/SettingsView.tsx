@@ -90,6 +90,8 @@ const copy = {
     pipelineSubtitle: "可选。启用后「解释」这一步交给云端多模态模型；检测与分割仍在本地运行。",
     pipelineCloudLabel: "启用云端解释",
     pipelineCloudHint: "不勾选则使用本地模型，行为不变。",
+    pipelineEnabledLabel: "启用智能分析页",
+    pipelineEnabledHint: "需要先部署 vlm-bridge 推理服务。未启用时左侧不显示入口，也不产生请求。",
     pipelineApiBase: "接口地址",
     pipelineApiBaseHint: "例如 https://dashscope.aliyuncs.com/compatible-mode/v1",
     pipelineModel: "模型名称",
@@ -209,6 +211,8 @@ const copy = {
     pipelineSubtitle: "Optional. When enabled, the reasoning step runs on a cloud multimodal model; detection and segmentation stay local.",
     pipelineCloudLabel: "Enable cloud reasoning",
     pipelineCloudHint: "Leave off to keep using the local model; nothing changes.",
+    pipelineEnabledLabel: "Enable smart analysis page",
+    pipelineEnabledHint: "Requires the vlm-bridge service. When off, the sidebar entry is hidden and no requests are made.",
     pipelineApiBase: "API base URL",
     pipelineApiBaseHint: "For example https://dashscope.aliyuncs.com/compatible-mode/v1",
     pipelineModel: "Model name",
@@ -972,6 +976,7 @@ function PipelineSettingsPanel({ text }: { locale: AppLocale; text: SettingsText
     setMessage("");
     try {
       const next = await api.updatePipelineSettings({
+        enabled: settings.enabled,
         cloud_enabled: settings.cloud_enabled,
         api_base: settings.api_base,
         model: settings.model,
@@ -982,6 +987,8 @@ function PipelineSettingsPanel({ text }: { locale: AppLocale; text: SettingsText
       setSettings(next);
       setApiKey("");
       setMessage(text.savedPipeline);
+      // 让外壳立即刷新「智能分析」入口的显示状态
+      window.dispatchEvent(new Event("pipeline-settings-changed"));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : text.error);
     } finally {
@@ -1000,12 +1007,24 @@ function PipelineSettingsPanel({ text }: { locale: AppLocale; text: SettingsText
           <h2>{text.pipelineTitle}</h2>
           <p>{text.pipelineSubtitle}</p>
         </div>
-        <span className={`settings-status ${settings.cloud_enabled ? "ready" : "disabled"}`}>
-          {settings.cloud_enabled ? "ON" : "OFF"}
+        <span className={`settings-status ${settings.enabled ? "ready" : "disabled"}`}>
+          {settings.enabled ? "ON" : "OFF"}
         </span>
       </header>
       {error ? <div className="validation invalid"><span>{error}</span></div> : null}
       {message && !error ? <div className="validation valid"><span>{message}</span></div> : null}
+
+      <label className="settings-toggle">
+        <input
+          type="checkbox"
+          checked={settings.enabled}
+          onChange={(event) => setSettings({ ...settings, enabled: event.target.checked })}
+        />
+        <span>
+          <strong>{text.pipelineEnabledLabel}</strong>
+          <small>{text.pipelineEnabledHint}</small>
+        </span>
+      </label>
 
       <label className="settings-toggle">
         <input

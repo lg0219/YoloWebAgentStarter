@@ -236,6 +236,7 @@ class SettingsService:
     def get_pipeline_settings(self) -> PipelineSettingsOut:
         section = self._read().get("pipeline", {})
         return PipelineSettingsOut(
+            enabled=bool(section.get("enabled", False)),
             cloud_enabled=bool(section.get("cloud_enabled", False)),
             api_base=str(section.get("api_base", "")).strip(),
             model=str(section.get("model", "")).strip(),
@@ -247,6 +248,7 @@ class SettingsService:
     def update_pipeline_settings(self, payload: PipelineSettingsUpdate) -> PipelineSettingsOut:
         data = self._read()
         section = dict(data.get("pipeline") or {})
+        section["enabled"] = payload.enabled
         section["cloud_enabled"] = payload.cloud_enabled
         section["api_base"] = payload.api_base.strip()
         section["model"] = payload.model.strip()
