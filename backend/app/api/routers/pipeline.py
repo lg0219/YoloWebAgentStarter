@@ -21,7 +21,10 @@ from app.core.storage import Storage
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
 BRIDGE_URL = os.environ.get("YWA_BRIDGE_URL", "http://127.0.0.1:8002")
-BRIDGE_JOBS_DIR = Path(os.environ.get("VLM_JOBS_DIR", "/home/linux/vlm-bridge/jobs"))
+# 默认与 vlm-bridge 服务自身的工作目录一致（同机部署零配置）；
+# 跨机部署时用 VLM_JOBS_DIR 指向本机可读的同一份目录。
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+BRIDGE_JOBS_DIR = Path(os.environ.get("VLM_JOBS_DIR", str(_REPO_ROOT / "services" / "vlm-bridge" / "jobs")))
 PROXY_TIMEOUT = float(os.environ.get("YWA_BRIDGE_TIMEOUT", "120"))
 
 

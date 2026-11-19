@@ -14,6 +14,7 @@
   GET  /batch/{id}/export.csv
   POST /batch/{id}/cancel
 """
+import base64
 import csv
 import glob
 import io
@@ -24,6 +25,7 @@ import queue
 import threading
 import time
 import traceback
+import urllib.request
 import uuid
 from datetime import datetime
 
@@ -136,11 +138,14 @@ def _evict_for(kind):
 def get_model(mid):
     if mid not in MODELS:
         raise KeyError("unknown model: %s" % mid)
+    spec = MODELS[mid]
+    kind = spec.get("type")
+    # 云端模型不加载权重、不占显存，也不进入 LRU 池
+    if kind == "reason_api":
+        return {"spec": spec}
     with POOL_LOCK:
         if mid in POOL:
             return POOL[mid]
-    spec = MODELS[mid]
-    kind = spec.get("type")
     if kind == "detect":
         from ultralytics import YOLO
         obj = YOLO(spec["path"])
@@ -169,7 +174,56 @@ def warm(template_id):
     stages = TEMPLATES[template_id]["stages"]
     for name in ("detect", "segment", "reason"):
         if name in stages:
-            get_model(stages[name]["model"])
+            mid = stages[name]["model"]
+            # 云端模型无需预热加载
+            if (MODELS.get(mid) or {}).get("type") == "reason_api":
+                continue
+            get_model(mid)
+
+
+def call_reason_api(spec, image, context, question):
+    """调用云端多模态大模型（OpenAI 兼容 /chat/completions）。
+
+    密钥不写入 config.yaml，由 spec.api_key_env 指定的环境变量提供。
+    """
+    base_url = (spec.get("base_url") or "").strip().rstrip("/")
+    model = (spec.get("model") or "").strip()
+    if not base_url or not model:
+        raise ValueError("云端模型缺少 base_url 或 model 配置")
+    key_env = (spec.get("api_key_env") or "VLM_API_KEY").strip()
+    api_key = os.environ.get(key_env, "").strip()
+    if not api_key:
+        raise ValueError("未设置环境变量 %s（云端模型密钥）" % key_env)
+
+    buf = io.BytesIO()
+    image.convert("RGB").save(buf, format="JPEG", quality=90)
+    data_url = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+
+    payload = {
+        "model": model,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": context + "\n" + question},
+                {"type": "image_url", "image_url": {"url": data_url}},
+            ],
+        }],
+        "max_tokens": int(spec.get("max_tokens", MAX_NEW_TOKENS)),
+        "temperature": 0,
+    }
+    req = urllib.request.Request(
+        base_url + "/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json",
+                 "Authorization": "Bearer " + api_key},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=float(spec.get("timeout", 60))) as resp:
+        body = json.loads(resp.read().decode("utf-8", "replace"))
+    choices = body.get("choices") or []
+    if not choices:
+        raise ValueError("云端返回结果为空：%s" % json.dumps(body, ensure_ascii=False)[:300])
+    return (choices[0].get("message", {}).get("content") or "").strip()
 
 
 # ---------- 流水线 ----------
@@ -216,17 +270,24 @@ def run_pipeline(image, template_id, prompt_override="", save_path=None):
         timings["reason_ms"] = 0
     elif "reason" in stages:
         spec = stages["reason"]
-        net = get_model(spec["model"])
+        mid = spec["model"]
+        is_api = (MODELS.get(mid) or {}).get("type") == "reason_api"
         question = prompt_override.strip() or spec.get("prompt", "").strip()
         ctx = "检测结果: " + (json.dumps(detections, ensure_ascii=False) if detections else "未检出目标")
         t2 = time.time()
         try:
-            pv = load_pixel_values(image).to(torch.bfloat16).to(DEVICE)
-            reply = net["model"].chat(net["tokenizer"], pv, ctx + "\n" + question,
-                                      dict(max_new_tokens=MAX_NEW_TOKENS, do_sample=False))
-            vlm_text = reply[0] if isinstance(reply, tuple) else reply
-        except Exception:
+            if is_api:
+                vlm_text = call_reason_api(MODELS[mid], image, ctx, question)
+            else:
+                net = get_model(mid)
+                pv = load_pixel_values(image).to(torch.bfloat16).to(DEVICE)
+                reply = net["model"].chat(net["tokenizer"], pv, ctx + "\n" + question,
+                                          dict(max_new_tokens=MAX_NEW_TOKENS, do_sample=False))
+                vlm_text = reply[0] if isinstance(reply, tuple) else reply
+        except Exception as exc:
             timings["reason_error"] = traceback.format_exc(limit=2)
+            if is_api:
+                vlm_text = "云端解释调用失败：%s" % exc
         timings["reason_ms"] = int((time.time() - t2) * 1000)
 
     if save_path and detections:
