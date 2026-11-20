@@ -6,15 +6,19 @@ import { useLeaveConfirm } from "./components/useLeaveConfirm";
 import { TrainingView } from "./pages/TrainingView";
 import { ModelsView } from "./pages/ModelsView";
 import { SettingsView } from "./pages/SettingsView";
+import type { SettingsTab } from "./pages/SettingsView";
 import { LogsView } from "./pages/LogsView";
 import { AgentView, type AgentPageContext } from "./pages/AgentView";
 import { PipelineView } from "./pages/PipelineView";
 import { AutoAnnotationModal } from "./components/AutoAnnotationModal";
 import { ImportCenterModal } from "./components/ImportCenterModal";
 import { readLocale, saveLocale, type AppLocale } from "./locale";
+import { readBrandBar, saveBrandBar } from "./brandBar";
 import type { Annotation, BBox, ClassLabel, Dataset, DatasetQualityReport, DuplicateReport, ImageItem, SamCapabilities, SamPrediction, SplitName, TaskType, ValidationReport } from "./types";
 
-type View = "workspace" | "annotation" | "training" | "models" | "pipeline" | "agent" | "settings-llm" | "settings-sam" | "settings-annotation" | "settings-language" | "logs";
+type View = "workspace" | "annotation" | "training" | "models" | "pipeline" | "agent" | "settings-llm" | "settings-sam" | "settings-annotation" | "settings-pipeline" | "settings-runtime" | "settings-language" | "logs";
+const SETTINGS_PREFIX = "settings-";
+const isSettingsView = (value: View): value is Extract<View, `settings-${string}`> => value.startsWith(SETTINGS_PREFIX);
 type CardReportKind = "validation" | "quality" | "duplicates";
 const ANNOTATION_IMAGE_PAGE_SIZE = 20;
 
@@ -32,6 +36,10 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [samCapabilities, setSamCapabilities] = useState<SamCapabilities>();
   const [locale, setLocale] = useState<AppLocale>(() => readLocale());
+  // 2026-11-06 新增：顶部品牌区显示开关（本机浏览器，见设置页「通用设置」）
+  const [showBrandBar, setShowBrandBar] = useState<boolean>(() => readBrandBar());
+  // 2026-11-19 新增：智能分析入口开关，默认关闭；在「设置 → 智能分析」中开启
+  const [pipelineEnabled, setPipelineEnabled] = useState<boolean>(false);
   const [annotationDirty, setAnnotationDirty] = useState(false);
   const [focusTrainingTaskId, setFocusTrainingTaskId] = useState<string>();
   const [focusModelId, setFocusModelId] = useState<string>();
@@ -96,6 +104,16 @@ export default function App() {
   useEffect(() => {
     refreshDatasets().catch((reason: unknown) => setError(errorMessage(reason)));
     api.getSystemInfo().then((info) => setSamCapabilities(info.sam)).catch((reason: unknown) => setError(errorMessage(reason)));
+    api.getPipelineSettings()
+      .then((settings) => setPipelineEnabled(settings.enabled))
+      .catch(() => setPipelineEnabled(false));
+    const onPipelineSettings = () => {
+      api.getPipelineSettings()
+        .then((settings) => setPipelineEnabled(settings.enabled))
+        .catch(() => undefined);
+    };
+    window.addEventListener("pipeline-settings-changed", onPipelineSettings);
+    return () => window.removeEventListener("pipeline-settings-changed", onPipelineSettings);
   }, []);
 
   const run = async (action: () => Promise<void>) => {
@@ -159,7 +177,7 @@ export default function App() {
   const activeSection: StarterSection =
     view === "annotation"
       ? "workspace"
-      : view === "settings-llm" || view === "settings-sam" || view === "settings-annotation" || view === "settings-language"
+      : isSettingsView(view)
         ? "settings"
         : view;
   const navigate = (section: StarterSection) => {
@@ -250,7 +268,7 @@ export default function App() {
   };
 
   return (
-    <StarterShell active={activeSection} datasetName={selected?.name} onNavigate={navigate} locale={locale}>
+    <StarterShell active={activeSection} datasetName={selected?.name} onNavigate={navigate} locale={locale} showBrandBar={showBrandBar} showPipeline={pipelineEnabled}>
       {error && <div className="toast error">{error}</div>}
       {notice && <div className="toast success">{notice}</div>}
       {leaveDialog}
@@ -307,19 +325,22 @@ export default function App() {
           onFocusModelConsumed={() => setFocusModelId(undefined)}
           onAskAgent={(model) => { setAgentFocus({ ...(model.dataset_id ? { dataset: { id: model.dataset_id, name: datasets.find((d) => d.id === model.dataset_id)?.name ?? model.dataset_id } } : {}), model: { id: model.id, name: model.name } }); setView("agent"); }}
         />
-      ) : view === "settings-llm" || view === "settings-sam" || view === "settings-annotation" || view === "settings-language" ? (
+      ) : isSettingsView(view) ? (
         <SettingsView
-          tab={view === "settings-llm" ? "llm" : view === "settings-sam" ? "sam" : "language"}
+          tab={view.slice(SETTINGS_PREFIX.length) as SettingsTab}
           locale={locale}
           onLocaleChange={setLocale}
-          onTabChange={(tab) =>
-            setView(tab === "llm" ? "settings-llm" : tab === "sam" ? "settings-sam" : tab === "annotation" ? "settings-annotation" : "settings-language")
-          }
+          showBrandBar={showBrandBar}
+          onBrandBarChange={(show) => {
+            saveBrandBar(show);
+            setShowBrandBar(show);
+          }}
+          onTabChange={(tab) => setView(`settings-${tab}` as View)}
           onSamSettingsChange={() => {
             api.getSystemInfo().then((info) => setSamCapabilities(info.sam)).catch(() => undefined);
           }}
         />
-      ) : view === "pipeline" ? (
+      ) : view === "pipeline" && pipelineEnabled ? (
         <PipelineView />
       ) : view === "logs" ? (
         <LogsView locale={locale} />
@@ -508,7 +529,7 @@ export function DatasetHome(props: {
       <section className="dataset-dialog data-exchange-dialog" role="dialog" aria-modal="true" aria-labelledby="dataset-upload-dialog-title" onMouseDown={(event) => event.stopPropagation()}>
         <header className="data-exchange-header"><div><span className="eyebrow">ADD IMAGES</span><h2 id="dataset-upload-dialog-title">添加图片到“{uploadTarget.name}”</h2><p>选择多张图片并指定 split，图片会进入当前本地数据集。</p></div><button className="icon-button" onClick={closeUpload} aria-label="关闭">×</button></header>
         <div className="upload-options"><label>导入到 split<select value={uploadSplit} onChange={(event) => setUploadSplit(event.target.value as SplitName)}><option value="train">train · 训练集</option><option value="val">val · 验证集</option><option value="test">test · 测试集</option></select></label></div>
-        <input ref={uploadFileRef} type="file" accept="image/*" multiple hidden onChange={(event) => { chooseImages(event.target.files ?? undefined); event.currentTarget.value = ""; }} />
+        <input ref={uploadFileRef} type="file" accept="image/*,.dcm,.dicom" multiple hidden onChange={(event) => { chooseImages(event.target.files ?? undefined); event.currentTarget.value = ""; }} />
         <button className={draggingImages ? "exchange-dropzone dragging" : "exchange-dropzone"} onClick={() => uploadFileRef.current?.click()} onDragEnter={(event) => { event.preventDefault(); setDraggingImages(true); }} onDragOver={(event) => event.preventDefault()} onDragLeave={() => setDraggingImages(false)} onDrop={(event) => { event.preventDefault(); setDraggingImages(false); chooseImages(event.dataTransfer.files); }}><span className="exchange-dropzone-icon">⇧</span><strong>{uploadFiles.length ? `已选择 ${uploadFiles.length} 张图片` : "拖放或选择图片"}</strong><small>{uploadFiles.length ? uploadFiles.slice(0, 3).map((file) => file.name).join("、") + (uploadFiles.length > 3 ? ` 等 ${uploadFiles.length} 张` : "") : "支持 JPG、PNG、WEBP 等常见图片格式，可多选"}</small></button>
         <footer className="data-exchange-footer"><span>原图会复制到受管数据目录，现有标注不会受影响。</span><div><button className="button" onClick={closeUpload}>取消</button><button className="button primary" disabled={props.busy || !uploadFiles.length} onClick={startUpload}>添加 {uploadFiles.length || ""} 张图片</button></div></footer>
       </section>

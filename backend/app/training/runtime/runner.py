@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -19,10 +20,29 @@ from app.training.observability.summary import write_training_summary
 from app.training.runtime.process_registry import process_registry
 
 
+def _configured_yolo_executable() -> str:
+    """读取设置页保存的 YOLO 可执行文件路径（settings.json 的 runtime 段）。"""
+    try:
+        from app.core.config import Settings
+
+        path = Settings.from_env().data_dir / "settings.json"
+        if not path.is_file():
+            return ""
+        data = json.loads(path.read_text(encoding="utf-8"))
+        value = (data.get("runtime") or {}).get("yolo_executable") or ""
+        return str(value).strip()
+    except Exception:
+        # 设置文件损坏或不可读时退回默认解析，不影响训练
+        return ""
+
+
 def resolve_yolo_command_prefix() -> list[str]:
     override = os.getenv("YWA_YOLO_EXECUTABLE", "").strip()
     if override:
         return [override]
+    configured = _configured_yolo_executable()
+    if configured and Path(configured).expanduser().exists():
+        return [str(Path(configured).expanduser())]
     repository_root = Path(__file__).resolve().parents[4]
     candidate = repository_root / ".venv" / ("Scripts" if os.name == "nt" else "bin") / ("yolo.exe" if os.name == "nt" else "yolo")
     if candidate.is_file():
@@ -110,6 +130,8 @@ class TrainingRunner:
         if not args:
             raise RuntimeError("Training command is missing.")
         if args[0] == "yolo":
+            # 权重已在训练前由 app.training.weights 下载到本地，这里保持裸名字，
+            # Ultralytics 会直接命中本地文件，不再触发自身下载。
             return [*resolve_yolo_command_prefix(), *args[1:]]
         return args
 

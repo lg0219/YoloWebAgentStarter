@@ -28,6 +28,13 @@ BRIDGE_JOBS_DIR = Path(os.environ.get("VLM_JOBS_DIR", str(_REPO_ROOT / "services
 PROXY_TIMEOUT = float(os.environ.get("YWA_BRIDGE_TIMEOUT", "120"))
 
 
+def _cloud_override(settings: Settings) -> dict | None:
+    """读取设置页里的云端解释配置，作为单次参数传给 vlm-bridge（不落盘到配置文件）。"""
+    from app.settings.service import SettingsService
+
+    return SettingsService(settings).pipeline_cloud_override()
+
+
 def _proxy(method: str, path: str, **kwargs) -> Response:
     url = BRIDGE_URL.rstrip("/") + path
     try:
@@ -126,6 +133,7 @@ def create_batch(
         "recursive": bool(payload.get("recursive")),
         "skip_processed": bool(payload.get("skip_processed")),
         "title": title,
+        "cloud": _cloud_override(settings),
     }
     return _proxy("POST", "/batch", json=body)
 
@@ -135,6 +143,7 @@ async def upload_batch(
     template: str = Form(""),
     save_images: bool = Form(False),
     files: list[UploadFile] = File(...),
+    settings: Settings = Depends(get_settings),
 ) -> Response:
     """浏览器直传少量图片建批（几百张以内）。"""
     payload_files = []
@@ -143,10 +152,14 @@ async def upload_batch(
         payload_files.append(
             ("files", (upload.filename or "image.jpg", content, upload.content_type or "image/jpeg"))
         )
+    form = {"template": template, "save_images": "true" if save_images else "false"}
+    override = _cloud_override(settings)
+    if override:
+        form["cloud"] = json.dumps(override, ensure_ascii=False)
     with httpx.Client(timeout=600) as client:
         upstream = client.post(
             BRIDGE_URL.rstrip("/") + "/batch/upload",
-            data={"template": template, "save_images": "true" if save_images else "false"},
+            data=form,
             files=payload_files,
         )
     return Response(

@@ -4,7 +4,9 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_session, get_training_service
+from app.api.dependencies import get_session, get_settings, get_training_service
+from app.core.config import Settings
+from app.training import weights as weight_service
 from app.training.schemas import (
     TrainingLogResponse,
     TrainingProfileCreate,
@@ -26,6 +28,24 @@ router = APIRouter(prefix="/training", tags=["training"])
 @router.get("/devices", response_model=TrainingDeviceListResponse)
 def list_devices(service: TrainingService = Depends(get_training_service)) -> TrainingDeviceListResponse:
     return TrainingDeviceListResponse(items=service.devices())
+
+
+# （lg0219）预训练权重：状态查询与手动下载（训练前必须完成下载）
+@router.get("/weights/status")
+def weight_status(model: str = Query(...), settings: Settings = Depends(get_settings)) -> dict:
+    info = weight_service.check_weight(model, settings)
+    state = weight_service.download_state(info["name"])
+    return {**info, "download": state}
+
+
+@router.post("/weights/download")
+def weight_download(payload: dict, settings: Settings = Depends(get_settings)) -> dict:
+    return weight_service.start_download(str(payload.get("model") or ""), settings)
+
+
+@router.get("/weights/download")
+def weight_download_state(model: str = Query(...), settings: Settings = Depends(get_settings)) -> dict:
+    return weight_service.download_state(model.strip())
 
 
 @router.get("/profiles", response_model=list[TrainingProfileResponse])

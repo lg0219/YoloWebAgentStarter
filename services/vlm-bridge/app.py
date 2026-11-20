@@ -61,6 +61,17 @@ def load_config():
     TEMPLATES = CFG.get("templates", {}) or {}
 
 
+def _parse_cloud(raw):
+    """解析 YWA 单次传入的云端解释配置；为空或非法时返回 None（走本地模型）。"""
+    if not raw:
+        return None
+    try:
+        value = json.loads(raw) if isinstance(raw, str) else raw
+    except ValueError:
+        return None
+    return value if isinstance(value, dict) and value else None
+
+
 # ---------- 图像预处理 (InternVL 官方做法) ----------
 import torchvision.transforms as T
 from torchvision.transforms.functional import InterpolationMode
@@ -190,10 +201,13 @@ def call_reason_api(spec, image, context, question):
     model = (spec.get("model") or "").strip()
     if not base_url or not model:
         raise ValueError("云端模型缺少 base_url 或 model 配置")
-    key_env = (spec.get("api_key_env") or "VLM_API_KEY").strip()
-    api_key = os.environ.get(key_env, "").strip()
+    # 单次传入的密钥优先（来自 YWA 设置页），否则读环境变量
+    api_key = (spec.get("api_key") or "").strip()
     if not api_key:
-        raise ValueError("未设置环境变量 %s（云端模型密钥）" % key_env)
+        key_env = (spec.get("api_key_env") or "VLM_API_KEY").strip()
+        api_key = os.environ.get(key_env, "").strip()
+        if not api_key:
+            raise ValueError("未设置环境变量 %s（云端模型密钥）" % key_env)
 
     buf = io.BytesIO()
     image.convert("RGB").save(buf, format="JPEG", quality=90)
@@ -227,7 +241,7 @@ def call_reason_api(spec, image, context, question):
 
 
 # ---------- 流水线 ----------
-def run_pipeline(image, template_id, prompt_override="", save_path=None):
+def run_pipeline(image, template_id, prompt_override="", save_path=None, cloud=None):
     if template_id not in TEMPLATES:
         raise KeyError("unknown template: %s" % template_id)
     stages = TEMPLATES[template_id]["stages"]
@@ -271,12 +285,14 @@ def run_pipeline(image, template_id, prompt_override="", save_path=None):
     elif "reason" in stages:
         spec = stages["reason"]
         mid = spec["model"]
-        is_api = (MODELS.get(mid) or {}).get("type") == "reason_api"
+        is_api = bool(cloud) or (MODELS.get(mid) or {}).get("type") == "reason_api"
         question = prompt_override.strip() or spec.get("prompt", "").strip()
         ctx = "检测结果: " + (json.dumps(detections, ensure_ascii=False) if detections else "未检出目标")
         t2 = time.time()
         try:
-            if is_api:
+            if cloud:
+                vlm_text = call_reason_api(cloud, image, ctx, question)
+            elif is_api:
                 vlm_text = call_reason_api(MODELS[mid], image, ctx, question)
             else:
                 net = get_model(mid)
@@ -340,7 +356,7 @@ def write_meta(jid, meta):
     os.replace(tmp, p)
 
 
-def create_job(template, images, save_images=False, title=""):
+def create_job(template, images, save_images=False, title="", cloud=None):
     jid = time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:4]
     os.makedirs(os.path.join(job_dir(jid), "annotated"), exist_ok=True)
     meta = {
@@ -348,6 +364,7 @@ def create_job(template, images, save_images=False, title=""):
         "template": template,
         "title": title or template,
         "save_images": bool(save_images),
+        "cloud": cloud or None,
         "total": len(images),
         "done": 0,
         "failed": 0,
@@ -386,7 +403,7 @@ def run_job(jid):
                 save_path = None
                 if meta["save_images"]:
                     save_path = os.path.join(job_dir(jid), "annotated", os.path.splitext(rec["name"])[0] + ".jpg")
-                out = run_pipeline(image, meta["template"], save_path=save_path)
+                out = run_pipeline(image, meta["template"], save_path=save_path, cloud=meta.get("cloud"))
                 rec.update({"ok": True, "summary": out["summary"], "reasoning": out["reasoning"],
                             "timings": out["timings"], "detections": out["detections"]})
                 if out["summary"]["count"] > 0:
@@ -460,14 +477,16 @@ def list_templates():
 
 
 @app.post("/analyze")
-async def analyze(file: UploadFile = File(...), template: str = Form(""), prompt: str = Form("")):
+async def analyze(file: UploadFile = File(...), template: str = Form(""), prompt: str = Form(""),
+                  cloud: str = Form("")):
     if STATE["status"] != "ok":
         return JSONResponse({"detail": "not ready", "error": STATE["error"]}, status_code=503)
     tid = template or next(iter(TEMPLATES))
     raw = await file.read()
     image = Image.open(io.BytesIO(raw)).convert("RGB")
+    override = _parse_cloud(cloud)
     try:
-        out = run_pipeline(image, tid, prompt_override=prompt)
+        out = run_pipeline(image, tid, prompt_override=prompt, cloud=override)
     except KeyError as e:
         return JSONResponse({"detail": str(e)}, status_code=400)
     out["ok"] = True
@@ -496,7 +515,8 @@ async def batch_create(payload: dict = Body(...)):
         files = files[:limit]
     if not files:
         return JSONResponse({"detail": "目录下没有待处理图片: %s（已跳过 %d 张历史图片）" % (d, skipped)}, status_code=400)
-    meta = create_job(tid, files, payload.get("save_images", False), payload.get("title", ""))
+    meta = create_job(tid, files, payload.get("save_images", False), payload.get("title", ""),
+                      cloud=payload.get("cloud") or None)
     meta.pop("images", None)
     meta["skipped_processed"] = skipped
     return meta
@@ -514,7 +534,8 @@ def _processed_paths() -> set:
 
 
 @app.post("/batch/upload")
-async def batch_upload(template: str = Form(""), files: list[UploadFile] = File(...), save_images: bool = Form(False)):
+async def batch_upload(template: str = Form(""), files: list[UploadFile] = File(...), save_images: bool = Form(False),
+                       cloud: str = Form("")):
     tid = template or next(iter(TEMPLATES))
     jid = time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:4]
     inbox = os.path.join(job_dir(jid), "input")
@@ -526,7 +547,7 @@ async def batch_upload(template: str = Form(""), files: list[UploadFile] = File(
         with open(p, "wb") as out:
             out.write(await f.read())
         saved.append(p)
-    meta = create_job(tid, saved, save_images, "上传批次")
+    meta = create_job(tid, saved, save_images, "上传批次", cloud=_parse_cloud(cloud))
     meta.pop("images", None)
     return meta
 
