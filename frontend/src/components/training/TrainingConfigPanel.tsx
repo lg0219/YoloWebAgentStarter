@@ -131,10 +131,10 @@ export function TrainingConfigPanel({
   };
 
   const guardSubmit = (event: FormEvent) => {
-    // 档位型引擎的权重由框架按需下载，不拦截提交；否则会退化成原生表单提交并整页刷新
-    if (!usesVariantSelect && !weight?.ready) {
+    // 走「下载权重」流程的引擎必须等权重就绪，否则训练会再触发一次下载
+    if (tracksWeight && !weight?.ready) {
       event.preventDefault();
-      setWeightError("模型权重未下载，请先下载！");
+      setWeightError("模型权重未下载，请先点击下载！");
       return;
     }
     setWeightError("");
