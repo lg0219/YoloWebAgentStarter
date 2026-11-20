@@ -31,6 +31,11 @@ def _build_model(variant: str, weights: str):
     """按档位实例化；档位缺省时退回 Base，本地权重优先。"""
     import rfdetr
 
+    from app.engines.rfdetr_home import ensure_rf_home
+
+    # 框架默认会把权重放进用户目录，受限环境下不可写；统一改到项目内
+    ensure_rf_home()
+
     classes = {
         "nano": "RFDETRNano",
         "small": "RFDETRSmall",

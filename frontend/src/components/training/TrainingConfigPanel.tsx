@@ -185,7 +185,9 @@ export function TrainingConfigPanel({
         onClick={() => void downloadWeight()}
       >
         {weight?.download.status === "downloading"
-          ? `下载中 ${weight.download.percent.toFixed(1)}%`
+          ? weight.download.percent > 0
+            ? `下载中 ${weight.download.percent.toFixed(1)}%`
+            : "下载中…"
           : weight?.ready
             ? "已下载"
             : weightBusy

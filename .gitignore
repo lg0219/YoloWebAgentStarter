@@ -29,3 +29,7 @@ runs/
 =2.0.7
 *.log
 .env.local
+
+# 本地模型权重与下载临时文件
+weights/
+*.tmp

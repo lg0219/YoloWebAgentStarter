@@ -52,6 +52,10 @@ def _set_state(key: str, **kwargs) -> None:
 
 def _rf_target(name: str) -> tuple[Path, str]:
     """返回 RF-DETR 权重的目标路径与文件名。"""
+    from app.engines.rfdetr_home import ensure_rf_home
+
+    # 先把缓存目录指到项目内，避免用户目录不可写时直接失败
+    ensure_rf_home()
     from rfdetr.assets.model_weights import get_model_cache_dir
 
     variant = (name or "").strip().lower() or RF_DEFAULT_VARIANT
