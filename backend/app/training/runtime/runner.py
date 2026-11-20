@@ -24,6 +24,29 @@ def resolve_yolo_command_prefix() -> list[str]:
     return get_engine().command_prefix()
 
 
+RT_EPOCH_DONE = re.compile(r"^\s*(?:\[ywa\]\s*)?Epoch:\s*\[(\d+)\]\s+Total time")
+
+
+def resolve_progress(engine_key: str, line: str, epochs: int, parser: TrainingMetricsParser) -> dict[str, int] | None:
+    """把一行日志换算成轮次进度；返回 None 表示这行不携带轮次信息。
+
+    - 独立版 RT-DETR：日志里 `[i/J]` 是批次、`Test: [0/1]` 是验证进度，只有
+      `Epoch: [n] Total time` 表示该轮结束，其它行一律忽略。
+    - 其它引擎沿用通用解析（如 YOLO 的 `1/10 ...`）。
+    """
+    if engine_key == "rtdetrv2":
+        match = RT_EPOCH_DONE.match(line)
+        if not match:
+            return None
+        total = max(int(epochs or 1), 1)
+        return {"epoch": min(int(match.group(1)) + 1, total), "total_epochs": total}
+    progress = parser.parse_progress_line(line)
+    if not progress or "epoch" not in progress:
+        return None
+    total = int(progress.get("total_epochs", epochs))
+    return {"epoch": max(min(int(progress.get("epoch", 0)), total), 0), "total_epochs": max(total, 1)}
+
+
 class TrainingRunner:
     def __init__(self, session_factory: sessionmaker[Session], queue, storage: Storage | None = None) -> None:
         self.session_factory = session_factory
@@ -122,37 +145,24 @@ class TrainingRunner:
         return str((task.config_json or {}).get("engine") or "")
 
     def _update_progress(self, task_id: str, line: str) -> None:
-        # 独立版 RT-DETR 的日志里 `[i/J]` 是批次、`Test: [0/1]` 是验证进度，
-        # 按通用规则解析会被反复覆盖成 0/1，所以这类任务只认「该轮跑完」那一行。
-        rt_epoch_done = re.match(r"^Epoch:\s*\[(\d+)\]\s+Total time", line)
-        progress = None if rt_epoch_done else self.metrics_parser.parse_progress_line(line)
-        if rt_epoch_done is None and not progress:
-            return
         with self.session_factory() as session:
             task = session.get(TrainingTask, task_id)
             if task is None or task.status != "running":
                 return
-            if self._engine_key(task) == "rtdetrv2":
-                if rt_epoch_done is None:
-                    return
-                total = max(int(task.epochs or 1), 1)
-                epoch = min(int(rt_epoch_done.group(1)) + 1, total)
-                task.progress_total_epochs = total
-                task.progress_epoch = epoch
-                task.progress_percent = round(epoch / total * 100, 2)
-                session.commit()
-                return
-            if progress and "epoch" in progress:
-                total = int(progress.get("total_epochs", task.epochs))
-                epoch = min(int(progress.get("epoch", 0)), total)
-                task.progress_total_epochs = max(total, 1)
-                task.progress_epoch = max(epoch, 0)
+            engine_key = self._engine_key(task)
+            resolved = resolve_progress(engine_key, line, int(task.epochs or 1), self.metrics_parser)
+            if resolved is not None:
+                task.progress_total_epochs = resolved["total_epochs"]
+                task.progress_epoch = resolved["epoch"]
                 task.progress_percent = round(task.progress_epoch / task.progress_total_epochs * 100, 2)
+            # 速度类指标只对通用引擎有意义，RT-DETR 的迭代速度和它不是一个口径
             live_metrics = dict(task.metrics_json or {})
-            for key in ("batch_time_seconds", "speed_it_per_sec"):
-                value = progress.get(key) if progress else None
-                if value is not None:
-                    live_metrics[key] = value
+            if resolved is None and engine_key != "rtdetrv2":
+                progress = self.metrics_parser.parse_progress_line(line)
+                for key in ("batch_time_seconds", "speed_it_per_sec"):
+                    value = progress.get(key) if progress else None
+                    if value is not None:
+                        live_metrics[key] = value
             if live_metrics != (task.metrics_json or {}):
                 task.metrics_json = live_metrics
             session.commit()
