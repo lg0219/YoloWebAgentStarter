@@ -10,3 +10,4 @@
 - Community v2 增加与固定 YoloWebAgent 快照兼容的 OBB 与 classify 数据集、标注、YOLO 交换和本地训练闭环。
 - 增加 segment 的 SAM 辅助建议：可配置 Ultralytics SAM 本地/命名检查点；未配置时明确标识为 review-only box_stub。
 - 修复导入根目录内文件软链接指向根目录外仍会被扫描读取的问题。
+- 训练工作区支持 Ultralytics 内置的 RT-DETR 检测模型（`rtdetr-l.pt` / `rtdetr-x.pt`），沿用现有引擎、权重下载与推理链路。

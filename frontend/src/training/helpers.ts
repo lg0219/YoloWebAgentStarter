@@ -36,18 +36,22 @@ export function defaultModelFor(taskType: TaskType): string {
   return ({ detect: "yolo11n.pt", segment: "yolo11n-seg.pt", obb: "yolo11n-obb.pt", classify: "yolo11n-cls.pt" })[taskType];
 }
 
-const MODEL_FAMILIES: Array<{ stem: string; label: string; sizes: string[]; tasks: TaskType[] }> = [
+// separator 用于 RT-DETR 这类「词干-档位」命名（rtdetr-l.pt）；YOLO 系列不需要分隔符。
+const MODEL_FAMILIES: Array<{ stem: string; label: string; sizes: string[]; tasks: TaskType[]; separator?: string }> = [
   { stem: "yolo26", label: "YOLO26", sizes: ["n", "s"], tasks: ["detect", "segment", "obb", "classify"] },
   { stem: "yolo11", label: "YOLO11", sizes: ["n", "s", "m", "l", "x"], tasks: ["detect", "segment", "obb", "classify"] },
   { stem: "yolov8", label: "YOLOv8", sizes: ["n", "s"], tasks: ["detect", "segment", "obb", "classify"] },
+  // RT-DETR 由 Ultralytics 内置支持，只能做检测，官方只发布 L / X 两档权重。
+  { stem: "rtdetr", label: "RT-DETR", sizes: ["l", "x"], tasks: ["detect"], separator: "-" },
 ];
 
 export function modelChoicesFor(taskType: TaskType): Array<{ value: string; label: string }> {
   const suffix = ({ detect: "", segment: "-seg", obb: "-obb", classify: "-cls" })[taskType];
   const taskLabel = ({ detect: "检测", segment: "分割", obb: "OBB", classify: "分类" })[taskType];
   return MODEL_FAMILIES.filter((family) => family.tasks.includes(taskType)).flatMap((family) => family.sizes.map((size) => {
-    const value = `${family.stem}${size}${suffix}.pt`;
-    return { value, label: `${family.label}${size.toUpperCase()}（${taskLabel}） · ${value}` };
+    const separator = family.separator ?? "";
+    const value = `${family.stem}${separator}${size}${suffix}.pt`;
+    return { value, label: `${family.label}${separator}${size.toUpperCase()}（${taskLabel}） · ${value}` };
   }));
 }
 

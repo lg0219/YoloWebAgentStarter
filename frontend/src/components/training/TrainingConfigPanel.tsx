@@ -319,7 +319,7 @@ export function TrainingConfigPanel({
             <div className="training-ws-field training-ws-field-wide">
               <span className="training-ws-field-label">
                 <label htmlFor={ids.model}>基础权重</label>
-                <FieldHelp text="训练的起点模型，相当于站在哪个已有模型的基础上继续练。小模型（n / s）练得快、精度上限低；大模型（m / l / x）更慢、更占显存，但精度上限高。默认 yolo11n.pt；第一次用哪个权重，程序就会自动联网下载哪个。" />
+                <FieldHelp text="训练的起点模型，相当于站在哪个已有模型的基础上继续练。小模型（n / s）练得快、精度上限低；大模型（m / l / x）更慢、更占显存，但精度上限高。默认 yolo11n.pt；第一次用哪个权重，程序就会自动联网下载哪个。RT-DETR 只能做检测，模型体量大、显存占用高，建议把批大小降到 4 以下。" />
               </span>
               <select
                 id={ids.model}

@@ -18,4 +18,16 @@ describe("training model choices", () => {
     expect(modelChoicesFor("segment").map((item) => item.value)).toContain("yolo26n-seg.pt");
     expect(modelChoicesFor("classify").map((item) => item.value)).toContain("yolov8n-cls.pt");
   });
+
+  it("offers the Ultralytics RT-DETR checkpoints for detection only", () => {
+    const detect = modelChoicesFor("detect");
+    const values = detect.map((item) => item.value);
+
+    expect(values).toEqual(expect.arrayContaining(["rtdetr-l.pt", "rtdetr-x.pt"]));
+    expect(detect.find((item) => item.value === "rtdetr-l.pt")?.label).toBe("RT-DETR-L（检测） · rtdetr-l.pt");
+
+    for (const task of ["segment", "obb", "classify"] as const) {
+      expect(modelChoicesFor(task).map((item) => item.value).some((value) => value.startsWith("rtdetr"))).toBe(false);
+    }
+  });
 });
