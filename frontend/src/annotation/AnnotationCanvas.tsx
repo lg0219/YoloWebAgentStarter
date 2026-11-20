@@ -3,6 +3,7 @@ import Konva from "konva";
 import { Image as KonvaImage, Layer, Line, Rect, Stage, Transformer } from "react-konva";
 import type { Annotation, AnnotationSettings, BBox, ClassLabel, ImageItem, OBB, SamCapabilities, TaskType } from "../types";
 import { api } from "../api/client";
+import { apiUrl } from "../api/runtimeConfig";
 import { clamp, clampBBoxToImage, clampOBBToImage, MIN_SHAPE_SIZE, normalizeAngle, normalizeBBox, toOriginalPoint } from "../utils/geometry";
 
 export type AnnotationDraft = {
@@ -82,7 +83,7 @@ export function AnnotationCanvas({ image, classes, annotations, activeClassId, s
       const ratio = Math.min(MAX_WIDTH / image.width, MAX_HEIGHT / image.height, 1);
       setDisplaySize({ width: Math.max(1, Math.round(image.width * ratio)), height: Math.max(1, Math.round(image.height * ratio)) });
     };
-    element.src = image.file_url.startsWith("http") ? image.file_url : `${(import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000").replace(/\/$/, "")}${image.file_url}`;
+    element.src = image.file_url.startsWith("http") ? image.file_url : apiUrl(image.file_url);
   }, [image]);
 
   // （lg0219）切换图片时复位缩放与平移，避免上一张的视角残留。
