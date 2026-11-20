@@ -1,7 +1,10 @@
 """RF-DETR 权重的并行下载。
 
 框架自带的下载是单连接，国内直连 repo.roboflow.com 只有十几 KB/s，349MB 要下几个小时。
-这里改成多连接分段下载，实测 8 连接能从个位数 KB/s 拉到 500 KB/s 以上，同时上报百分比。
+这里改成多连接分段下载，实测 8 连接能从个位数 KB/s 拉到数百 KB/s，同时上报百分比。
+
+注意：目标文件会预先占位成最终大小，所以「文件大小」不等于下载进度；判断完成看统计的
+已下载字节数，以及下载结束后是否成功改名。
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ from pathlib import Path
 CHUNK_SIZE = 4 * 1024 * 1024
 DEFAULT_WORKERS = 8
 USER_AGENT = "YWA/0.1"
+RETRIES = 3
 
 
 def remote_size(url: str, timeout: int = 30) -> int:
@@ -27,19 +31,6 @@ def remote_size(url: str, timeout: int = 30) -> int:
     return int(content_range.rsplit("/", 1)[1])
 
 
-def _download_chunk(url: str, path: Path, start: int, end: int, counter, lock, stop: threading.Event) -> None:
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Range": f"bytes={start}-{end}"})
-    with urllib.request.urlopen(request, timeout=60) as response, open(path, "r+b") as handle:
-        handle.seek(start)
-        while not stop.is_set():
-            data = response.read(256 * 1024)
-            if not data:
-                break
-            handle.write(data)
-            with lock:
-                counter[0] += len(data)
-
-
 def download(
     url: str,
     target: Path,
@@ -47,7 +38,7 @@ def download(
     workers: int = DEFAULT_WORKERS,
     on_progress=None,
 ) -> Path:
-    """并行分段下载到 target；失败会清理临时文件后抛出。"""
+    """并行分段下载到 target；全部段成功、校验大小一致后才改名为目标文件。"""
     total = remote_size(url)
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_suffix(target.suffix + ".part")
@@ -55,9 +46,6 @@ def download(
     with open(temporary, "wb") as handle:
         handle.truncate(total)
 
-    counter = [0]
-    lock = threading.Lock()
-    stop = threading.Event()
     ranges: list[tuple[int, int]] = []
     start = 0
     while start < total:
@@ -65,30 +53,70 @@ def download(
         ranges.append((start, end))
         start = end + 1
 
-    def run(pairs: list[tuple[int, int]]) -> None:
-        for begin, finish in pairs:
+    lock = threading.Lock()
+    stop = threading.Event()
+    chunk_done: dict[int, int] = {index: 0 for index in range(len(ranges))}
+
+    def progress(current: int) -> None:
+        if on_progress is None:
+            return
+        try:
+            on_progress(current, total)
+        except Exception:
+            pass
+
+    def download_chunk(index: int, begin: int, finish: int) -> None:
+        need = finish - begin + 1
+        attempt = 0
+        while attempt < RETRIES and not stop.is_set():
+            attempt += 1
+            written = 0
+            try:
+                request = urllib.request.Request(
+                    url, headers={"User-Agent": USER_AGENT, "Range": f"bytes={begin}-{finish}"}
+                )
+                with urllib.request.urlopen(request, timeout=120) as response, open(temporary, "r+b") as handle:
+                    handle.seek(begin)
+                    while not stop.is_set() and written < need:
+                        data = response.read(min(256 * 1024, need - written))
+                        if not data:
+                            break
+                        handle.write(data)
+                        written += len(data)
+                        with lock:
+                            chunk_done[index] = written
+                with lock:
+                    chunk_done[index] = written
+                if written >= need:
+                    return
+            except Exception:
+                if stop.is_set():
+                    return
+        # 重试用尽仍不完整，整体失败
+        with lock:
+            stop.set()
+
+    def run(chunks: list[tuple[int, int, int]]) -> None:
+        for index, begin, finish in chunks:
             if stop.is_set():
                 return
-            _download_chunk(url, temporary, begin, finish, counter, lock, stop)
+            download_chunk(index, begin, finish)
 
-    # 段数按连接数轮转，避免把相邻段全压在一个线程
-    buckets: list[list[tuple[int, int]]] = [[] for _ in range(max(1, min(workers, len(ranges))))]
-    for index, pair in enumerate(ranges):
-        buckets[index % len(buckets)].append(pair)
+    buckets: list[list[tuple[int, int, int]]] = [[] for _ in range(max(1, min(workers, len(ranges))))]
+    for index, (begin, finish) in enumerate(ranges):
+        buckets[index % len(buckets)].append((index, begin, finish))
 
     threads = [threading.Thread(target=run, args=(bucket,), daemon=True) for bucket in buckets if bucket]
+    for thread in threads:
+        thread.start()
+
     try:
-        for thread in threads:
-            thread.start()
         while any(thread.is_alive() for thread in threads):
             for thread in threads:
                 thread.join(timeout=0.5)
-            if on_progress is not None:
-                with lock:
-                    done = counter[0]
-                on_progress(done, total)
-            if counter[0] >= total:
-                break
+            with lock:
+                current = sum(chunk_done.values())
+            progress(current)
         for thread in threads:
             thread.join()
     except Exception:
@@ -96,10 +124,11 @@ def download(
         temporary.unlink(missing_ok=True)
         raise
 
-    if temporary.stat().st_size != total:
+    with lock:
+        current = sum(chunk_done.values())
+    if stop.is_set() or current != total:
         temporary.unlink(missing_ok=True)
-        raise IOError("下载文件大小与服务器不一致")
+        raise IOError(f"下载不完整：{current}/{total} 字节")
     os.replace(temporary, target)
-    if on_progress is not None:
-        on_progress(total, total)
+    progress(total)
     return target
