@@ -1049,8 +1049,13 @@
 
 .training-ws-history-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  /* 卡片内容（长错误文案、进度数字）不应把列撑宽，否则整行会溢出被裁切 */
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   gap: 16px;
+}
+
+.training-ws-exp-card {
+  min-width: 0;
 }
 
 .training-ws-exp-card {

@@ -437,9 +437,15 @@ export function TrainingConfigPanel({
               </div>
             ) : null}
           </div>
-          <p className="tcc-model-hint training-ws-field-wide" role="note">
-            训练前必须先把 {form.model} 下载到本地。点击上方「下载权重」，完成后按钮置灰；切换权重会重新判断是否已下载。请确认适用许可后再训练。
-          </p>
+          {usesAssets ? (
+            <p className="tcc-model-hint training-ws-field-wide" role="note">
+              训练前必须先把 {form.model} 下载到本地。点击上方「下载权重」，完成后按钮置灰；切换权重会重新判断是否已下载。请确认适用许可后再训练。
+            </p>
+          ) : (
+            <p className="tcc-model-hint training-ws-field-wide" role="note">
+              该引擎按档位使用官方预训练权重：点「下载权重」可提前下好（约几百 MB），也可以直接开始训练由框架自行下载。请确认适用许可后再训练。
+            </p>
+          )}
         </section>
 
         <div className="training-ws-advanced">
