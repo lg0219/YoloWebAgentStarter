@@ -71,7 +71,7 @@ def test_auto_annotation_runs_as_a_reviewable_dataset_task(client, monkeypatch):
     assert annotations.json()[0]["class_id"] == class_id
     logs = client.get(f"/api/auto-annotation/{task_id}/logs")
     assert logs.status_code == 200
-    assert "Auto annotation completed" in logs.json()["logs"]
+    assert "自动标注已完成" in logs.json()["logs"]
     deleted = client.delete(f"/api/models/{model_id}")
     assert deleted.status_code == 409, deleted.text
     assert deleted.json()["error"]["code"] == "model_in_use"

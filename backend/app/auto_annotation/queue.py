@@ -42,7 +42,7 @@ class AutoAnnotationQueue:
             tasks = list(session.scalars(select(AutoAnnotationTask).where(AutoAnnotationTask.status == "running")))
             for task in tasks:
                 task.status = "failed"
-                task.error_message = "Auto annotation was interrupted by a service restart."
+                task.error_message = "服务重启导致自动标注中断。"
                 task.finished_at = utc_now()
             if tasks:
                 session.commit()
