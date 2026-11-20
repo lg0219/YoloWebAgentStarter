@@ -130,15 +130,36 @@ def _write_sidecar(output_dir: Path, *, variant: str, resolution: int, names: li
         (weights / f"{name}.json").write_text(text, encoding="utf-8")
 
 
-def _write_results_csv(output_dir: Path, epochs: int) -> None:
-    """从内嵌版日志里抠出验证指标，写成应用认识的 results.csv。"""
+class _Tee:
+    """把训练输出原样转发到真实 stdout，同时留存一份供结束前提取指标。"""
+
+    def __init__(self, stream) -> None:
+        self._stream = stream
+        self.buffer: list[str] = []
+
+    def write(self, data: str) -> int:
+        self._stream.write(data)
+        self.buffer.append(data)
+        return len(data)
+
+    def flush(self) -> None:
+        self._stream.flush()
+
+    def isatty(self) -> bool:
+        return False
+
+
+def _write_results_csv(output_dir: Path, epochs: int, text: str = "") -> None:
+    """从训练输出里提取验证指标，写成应用认识的 results.csv。"""
     import csv
     import re
 
-    log_path = output_dir / "log.txt"
-    if not log_path.is_file():
+    if not text:
+        log_path = output_dir / "log.txt"
+        if log_path.is_file():
+            text = log_path.read_text(encoding="utf-8", errors="replace")
+    if not text:
         return
-    text = log_path.read_text(encoding="utf-8", errors="replace")
 
     def last_value(pattern: str) -> str:
         matches = re.findall(pattern, text)
@@ -147,6 +168,8 @@ def _write_results_csv(output_dir: Path, epochs: int) -> None:
     map50 = last_value(r"IoU=0\.50\s+\|[^=]+=\s*([\d.\-]+)")
     map50_95 = last_value(r"IoU=0\.50:0\.95 \|[^=]+=\s*([\d.\-]+)")
     losses = re.findall(r"loss: ([\d.]+)", text)
+    if not map50 and not map50_95:
+        return
     target = output_dir / "results.csv"
     with target.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
@@ -224,9 +247,17 @@ def main(argv: list[str] | None = None) -> int:
         print_rank=0,
         local_rank=None,
     )
-    train_main(train_args)
+    # 内嵌版的训练输出只走 stdout，这里顺带留一份用于提取结束时的验证指标
+    original_stdout = sys.stdout
+    tee = _Tee(original_stdout)
+    sys.stdout = tee
+    try:
+        train_main(train_args)
+    finally:
+        sys.stdout = original_stdout
+    captured = "".join(tee.buffer)
     _copy_checkpoints(output_dir)
-    _write_results_csv(output_dir, args.epochs)
+    _write_results_csv(output_dir, args.epochs, captured)
     _write_sidecar(output_dir, variant=variant, resolution=args.resolution, names=data["names"])
     print("[ywa] checkpoints copied to weights/", flush=True)
     return 0
