@@ -312,14 +312,16 @@ class SettingsService:
         return self.get_runtime_settings()
 
     def effective_settings(self) -> Settings:
-        """把界面可配的运行参数叠加到启动配置上，供上传等校验使用。"""
-        runtime = self.get_runtime_settings()
-        return replace(
-            self.settings,
-            max_upload_bytes=runtime.max_upload_mb * 1024 * 1024,
-            max_video_upload_bytes=runtime.max_video_upload_mb * 1024 * 1024,
-            max_video_duration_seconds=runtime.max_video_duration_seconds,
-        )
+        """把界面显式配置的运行参数叠加到启动配置上；未配置的项保持原值。"""
+        section = self._read().get("runtime") or {}
+        changes: dict[str, int] = {}
+        if "max_upload_mb" in section:
+            changes["max_upload_bytes"] = int(section["max_upload_mb"]) * 1024 * 1024
+        if "max_video_upload_mb" in section:
+            changes["max_video_upload_bytes"] = int(section["max_video_upload_mb"]) * 1024 * 1024
+        if "max_video_duration_seconds" in section:
+            changes["max_video_duration_seconds"] = int(section["max_video_duration_seconds"])
+        return replace(self.settings, **changes) if changes else self.settings
 
     # --- （lg0219）部署信息：只读展示 ---
 
