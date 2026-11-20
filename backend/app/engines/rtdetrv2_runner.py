@@ -64,6 +64,8 @@ def build_config(
         "remap_mscoco_category: False",
         f"eval_spatial_size: [{size}, {size}]",
         f"epoches: {int(epochs)}",
+        # 内嵌版默认每轮存一个 300MB 级 checkpointNNNN.pth；这里只保留 last 与 best
+        "checkpoint_freq: 1000",
         "",
         "PResNet:",
         # 完整 COCO 权重通过 --tuning 载入，这里不重复加载 ImageNet 主干
@@ -126,6 +128,30 @@ def _write_sidecar(output_dir: Path, *, variant: str, resolution: int, names: li
     text = json.dumps(payload, ensure_ascii=False, indent=2)
     for name in ("best", "last"):
         (weights / f"{name}.json").write_text(text, encoding="utf-8")
+
+
+def _write_results_csv(output_dir: Path, epochs: int) -> None:
+    """从内嵌版日志里抠出验证指标，写成应用认识的 results.csv。"""
+    import csv
+    import re
+
+    log_path = output_dir / "log.txt"
+    if not log_path.is_file():
+        return
+    text = log_path.read_text(encoding="utf-8", errors="replace")
+
+    def last_value(pattern: str) -> str:
+        matches = re.findall(pattern, text)
+        return matches[-1].strip() if matches else ""
+
+    map50 = last_value(r"IoU=0\.50\s+\|[^=]+=\s*([\d.\-]+)")
+    map50_95 = last_value(r"IoU=0\.50:0\.95 \|[^=]+=\s*([\d.\-]+)")
+    losses = re.findall(r"loss: ([\d.]+)", text)
+    target = output_dir / "results.csv"
+    with target.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["epoch", "time", "train/loss", "metrics/mAP50(B)", "metrics/mAP50-95(B)"])
+        writer.writerow([max(int(epochs), 1), "", losses[-1] if losses else "", map50, map50_95])
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -200,6 +226,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     train_main(train_args)
     _copy_checkpoints(output_dir)
+    _write_results_csv(output_dir, args.epochs)
     _write_sidecar(output_dir, variant=variant, resolution=args.resolution, names=data["names"])
     print("[ywa] checkpoints copied to weights/", flush=True)
     return 0

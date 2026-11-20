@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -116,6 +117,21 @@ class TrainingRunner:
     def _update_progress(self, task_id: str, line: str) -> None:
         progress = self.metrics_parser.parse_progress_line(line)
         if not progress:
+            # 独立版 RT-DETR 的日志是 `Epoch: [n] [i/J]`，里面的 i/J 是批次不是轮次，
+            # 直接按通用规则解析会把它当成轮次（实测会被 Test: [0/1] 覆盖成 0/1）。
+            # 这里只认「该轮跑完」的那一行，再换算成轮次进度。
+            match = re.match(r"^Epoch:\s*\[(\d+)\]\s+Total time", line)
+            if match:
+                with self.session_factory() as session:
+                    task = session.get(TrainingTask, task_id)
+                    if task is None or task.status != "running":
+                        return
+                    total = max(int(task.epochs or 1), 1)
+                    epoch = min(int(match.group(1)) + 1, total)
+                    task.progress_total_epochs = total
+                    task.progress_epoch = epoch
+                    task.progress_percent = round(epoch / total * 100, 2)
+                    session.commit()
             return
         with self.session_factory() as session:
             task = session.get(TrainingTask, task_id)
