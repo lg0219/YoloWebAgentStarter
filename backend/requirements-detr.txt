@@ -1,6 +1,10 @@
 # 可选依赖：接入 RF-DETR 引擎时安装（默认不装，避免所有用户承担体积）
 # 安装：.venv\Scripts\python.exe -m pip install -r backend/requirements-detr.txt
-rfdetr==1.12.1
+# 必须带 [train]：不带的话训练会报 "RF-DETR training dependencies are missing"（缺 pytorch_lightning）
+rfdetr[train,loggers]==1.12.1
+# 若上面的 extras 让 pip 依赖解析卡住，可改为分开装（本项目实测可行）：
+#   pip install rfdetr==1.12.1
+#   pip install --no-deps pytorch_lightning torchmetrics lightning-utilities
 # 与 ultralytics 的 numpy 1.x 基线保持一致，避免被依赖解析升级
 numpy>=1.23,<2.0.0
 # scipy 1.17+ 要求 numpy>=2，此处锁定兼容版本

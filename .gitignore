@@ -33,3 +33,7 @@ runs/
 # 本地模型权重与下载临时文件
 weights/
 *.tmp
+
+# pip 在仓库根目录留下的临时目录
+pip-unpack-*/
+pip-metadata-*/

@@ -6,6 +6,7 @@
 - 「下载权重」按钮对 RF-DETR 与独立版 RT-DETR 同样可用：按引擎分派到各自的权重来源，界面状态一致。
 - 修复档位型引擎点击开始会整页刷新回数据集页、训练任务未提交的问题。
 - 修复 RF-DETR 权重下载写入 `~/.roboflow` 时在受限账户下报 `WinError 5` 的问题：缓存目录默认改到项目内 `weights/rfdetr/`，显式设置 `RF_HOME` 时仍尊重用户选择。
+- 修复 RF-DETR 训练启动即失败（缺少 `pytorch_lightning`）的问题：依赖改为 `rfdetr[train,loggers]`，并记录绕开 pip 依赖解析卡住的装法。
 
 ## lg0219-v0.2.0（2026-11-20）
 
