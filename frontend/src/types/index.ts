@@ -561,4 +561,8 @@ export interface TrainingEngineCapability {
   weight_suffixes: string[];
   supported_params: string[];
   fixed_params: Record<string, string>;
+  // 允许「基础权重」留空或填档位名（如独立版 RT-DETR）
+  allows_blank_model?: boolean;
+  // 引擎可选的模型档位；有值时不走「下载权重」流程
+  model_choices?: string[];
 }

@@ -23,10 +23,12 @@ def _bootstrap() -> None:
         return
     # 延迟导入，避免与领域模块形成循环依赖
     from app.engines.rfdetr import RfDetrEngine
+    from app.engines.rtdetrv2 import RtdetrV2Engine
     from app.engines.yolo import YoloEngine
 
     register_engine(YoloEngine())
     register_engine(RfDetrEngine())
+    register_engine(RtdetrV2Engine())
 
 
 def get_engine(key: str | None = None) -> ModelEngine:
@@ -70,6 +72,8 @@ def engine_capabilities() -> list[dict]:
                 "weight_suffixes": list(engine.info.weight_suffixes),
                 "supported_params": sorted(engine.supported_params),
                 "fixed_params": dict(engine.fixed_params),
+                "allows_blank_model": bool(getattr(engine, "allows_blank_model", False)),
+                "model_choices": list(getattr(engine, "model_choices", ())),
             }
         )
     return payload

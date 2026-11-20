@@ -61,6 +61,11 @@ export function TrainingConfigPanel({
   const modelChoices = modelChoicesFor(dataset.task_type);
   const modelInList = modelChoices.some((item) => item.value === form.model);
   const taskMeta = TASK_META[dataset.task_type];
+  // （lg0219）按所选引擎的能力渲染参数：不支持的隐藏，固定的以只读说明展示
+  const engineCap = engines.find((item) => item.key === form.engine);
+  // 独立版 RT-DETR 这类引擎没有「官方资产名 + 下载」，而是选一个结构档位从零训练
+  const variantChoices = engineCap?.model_choices ?? [];
+  const usesVariantSelect = variantChoices.length > 0;
 
   // （lg0219）预训练权重：训练前必须先下载；未就绪时不允许开始训练
   const [weight, setWeight] = useState<WeightStatus | null>(null);
@@ -101,10 +106,11 @@ export function TrainingConfigPanel({
   useEffect(() => {
     setWeight(null);
     setWeightError("");
-    void refreshWeight(form.model);
+    // 档位选择型引擎没有「下载权重」这一步，不必查询状态
+    if (!usesVariantSelect) void refreshWeight(form.model);
     return stopPolling;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.model]);
+  }, [form.model, usesVariantSelect]);
 
   const downloadWeight = async () => {
     setWeightBusy(true);
@@ -121,6 +127,11 @@ export function TrainingConfigPanel({
   };
 
   const guardSubmit = (event: FormEvent) => {
+    // 档位选择型引擎不走「下载权重」流程，直接提交
+    if (usesVariantSelect) {
+      setWeightError("");
+      return;
+    }
     if (!weight?.ready) {
       event.preventDefault();
       setWeightError("模型权重未下载，请先下载！");
@@ -149,8 +160,6 @@ export function TrainingConfigPanel({
     deterministic: fieldId("deterministic"),
   };
 
-  // （lg0219）按所选引擎的能力渲染参数：不支持的隐藏，固定的以只读说明展示
-  const engineCap = engines.find((item) => item.key === form.engine);
   const supports = (name: string) => !engineCap || engineCap.supported_params.includes(name);
   const fixedNote = (name: string) => (engineCap?.fixed_params?.[name] as string | undefined) ?? "";
   // 是否使用「官方资产名 + 下载」这套权重形态（YOLO）；RF-DETR 用本地 .pth 路径
@@ -159,11 +168,12 @@ export function TrainingConfigPanel({
   const changeEngine = (key: string) => {
     const next = engines.find((item) => item.key === key);
     const nextUsesAssets = !next || next.weight_suffixes.includes(".pt");
+    const nextChoices = next?.model_choices ?? [];
     setForm((prev) => ({
       ...prev,
       engine: key,
       // 切换引擎时把权重重置为该引擎可用的默认值，避免残留不匹配的文件名
-      model: nextUsesAssets ? defaultModelFor(dataset.task_type) : "",
+      model: nextUsesAssets ? defaultModelFor(dataset.task_type) : (nextChoices[0] ?? ""),
     }));
   };
 
@@ -295,7 +305,24 @@ export function TrainingConfigPanel({
                 )}
               </select>
             </div>
-            {!usesAssets ? (
+            {usesVariantSelect ? (
+              <div className="training-ws-field training-ws-field-wide">
+                <span className="training-ws-field-label">
+                  <label htmlFor={ids.model}>模型档位</label>
+                  <FieldHelp text="独立版 RT-DETR 按结构档位从零训练：r18 最轻、r101 最重。档位越大精度上限越高，但训练更慢、更吃显存。默认 r18。" />
+                </span>
+                <select
+                  id={ids.model}
+                  value={form.model || variantChoices[0]}
+                  onChange={(event) => setForm((prev) => ({ ...prev, model: event.target.value }))}
+                >
+                  {variantChoices.map((choice) => (
+                    <option key={choice} value={choice}>{choice}</option>
+                  ))}
+                </select>
+                <small className="training-weight-state">选档位即可训练，无需下载权重</small>
+              </div>
+            ) : !usesAssets ? (
               <div className="training-ws-field training-ws-field-wide">
                 <span className="training-ws-field-label">
                   <label htmlFor={ids.model}>基础权重（.pth）</label>
