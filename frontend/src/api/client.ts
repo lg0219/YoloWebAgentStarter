@@ -223,11 +223,13 @@ export const api = {
     request<RuntimeSettings>("/api/settings/runtime", json(payload, "PUT")),
   // （lg0219）部署信息：只读
   getDeploymentInfo: () => request<DeploymentInfo>("/api/settings/deployment"),
-  // （lg0219）预训练权重：训练前必须先下载
-  getWeightStatus: (model: string) =>
-    request<WeightStatus>(`/api/training/weights/status?model=${encodeURIComponent(model)}`),
-  startWeightDownload: (model: string) =>
-    request<WeightDownloadState>("/api/training/weights/download", json({ model })),
+  // （lg0219）预训练权重：训练前必须先下载；engine 让 RF-DETR / 独立版 RT-DETR 也能复用
+  getWeightStatus: (model: string, engine = "yolo") =>
+    request<WeightStatus>(
+      `/api/training/weights/status?model=${encodeURIComponent(model)}&engine=${encodeURIComponent(engine)}`,
+    ),
+  startWeightDownload: (model: string, engine = "yolo") =>
+    request<WeightDownloadState>("/api/training/weights/download", json({ model, engine })),
   // （lg0219）可用训练引擎及参数能力
   getTrainingEngines: () => request<TrainingEngineCapability[]>("/api/training/engines"),
 };

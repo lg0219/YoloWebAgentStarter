@@ -66,6 +66,10 @@ export function TrainingConfigPanel({
   // 独立版 RT-DETR 这类引擎没有「官方资产名 + 下载」，而是选一个结构档位从零训练
   const variantChoices = engineCap?.model_choices ?? [];
   const usesVariantSelect = variantChoices.length > 0;
+  // 是否使用「官方资产名 + 下载」这套权重形态（YOLO）
+  const usesAssets = !engineCap || engineCap.weight_suffixes.includes(".pt");
+  // 档位型引擎的权重由框架下载，也可以走同一个按钮；RF-DETR 手填路径时不查状态
+  const tracksWeight = usesVariantSelect || usesAssets;
 
   // （lg0219）预训练权重：训练前必须先下载；未就绪时不允许开始训练
   const [weight, setWeight] = useState<WeightStatus | null>(null);
@@ -82,13 +86,13 @@ export function TrainingConfigPanel({
 
   const refreshWeight = async (model: string) => {
     try {
-      const status = await api.getWeightStatus(model);
+      const status = await api.getWeightStatus(model, form.engine);
       setWeight(status);
       if (status.download.status === "downloading") {
         stopPolling();
         pollTimer.current = window.setInterval(async () => {
           try {
-            const next = await api.getWeightStatus(model);
+            const next = await api.getWeightStatus(model, form.engine);
             setWeight(next);
             if (next.download.status !== "downloading") stopPolling();
           } catch {
@@ -106,17 +110,17 @@ export function TrainingConfigPanel({
   useEffect(() => {
     setWeight(null);
     setWeightError("");
-    // 档位选择型引擎没有「下载权重」这一步，不必查询状态
-    if (!usesVariantSelect) void refreshWeight(form.model);
+    // 档位型引擎也能用同一个按钮预置权重；RF-DETR 手填路径时只做本地文件判断
+    if (tracksWeight) void refreshWeight(form.model);
     return stopPolling;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.model, usesVariantSelect]);
+  }, [form.model, form.engine, tracksWeight]);
 
   const downloadWeight = async () => {
     setWeightBusy(true);
     setWeightError("");
     try {
-      const state = await api.startWeightDownload(form.model);
+      const state = await api.startWeightDownload(form.model, form.engine);
       setWeight((prev) => (prev ? { ...prev, download: state } : prev));
       await refreshWeight(form.model);
     } catch (reason) {
@@ -127,12 +131,8 @@ export function TrainingConfigPanel({
   };
 
   const guardSubmit = (event: FormEvent) => {
-    // 档位选择型引擎不走「下载权重」流程，直接提交
-    if (usesVariantSelect) {
-      setWeightError("");
-      return;
-    }
-    if (!weight?.ready) {
+    // 档位型引擎的权重由框架按需下载，不拦截提交；否则会退化成原生表单提交并整页刷新
+    if (!usesVariantSelect && !weight?.ready) {
       event.preventDefault();
       setWeightError("模型权重未下载，请先下载！");
       return;
@@ -162,8 +162,6 @@ export function TrainingConfigPanel({
 
   const supports = (name: string) => !engineCap || engineCap.supported_params.includes(name);
   const fixedNote = (name: string) => (engineCap?.fixed_params?.[name] as string | undefined) ?? "";
-  // 是否使用「官方资产名 + 下载」这套权重形态（YOLO）；RF-DETR 用本地 .pth 路径
-  const usesAssets = !engineCap || engineCap.weight_suffixes.includes(".pt");
 
   const changeEngine = (key: string) => {
     const next = engines.find((item) => item.key === key);
@@ -176,6 +174,34 @@ export function TrainingConfigPanel({
       model: nextUsesAssets ? defaultModelFor(dataset.task_type) : (nextChoices[0] ?? ""),
     }));
   };
+
+  // 权重准备按钮：YOLO 走项目下载器，档位型引擎由框架按档位下载，界面共用同一套状态
+  const weightActions = (
+    <div className="training-weight-actions">
+      <button
+        type="button"
+        className="button"
+        disabled={weightBusy || !weight || weight.ready || weight.download.status === "downloading"}
+        onClick={() => void downloadWeight()}
+      >
+        {weight?.download.status === "downloading"
+          ? `下载中 ${weight.download.percent.toFixed(1)}%`
+          : weight?.ready
+            ? "已下载"
+            : weightBusy
+              ? "准备中…"
+              : "下载权重"}
+      </button>
+      <small className={`training-weight-state${weight?.ready ? " ready" : ""}`}>
+        {weight?.ready
+          ? "本地已就绪，可直接训练"
+          : weight?.download.status === "failed"
+            ? `下载失败：${weight.download.error ?? "未知原因"}`
+            : "尚未下载，请先点击下载"}
+      </small>
+      {weightError ? <small className="annotation-form-error">{weightError}</small> : null}
+    </div>
+  );
 
   return (
     <section id="training-config-anchor" className="training-ws-card training-ws-config">
@@ -321,6 +347,7 @@ export function TrainingConfigPanel({
                   ))}
                 </select>
                 <small className="training-weight-state">选档位即可训练；首次会自动下载官方预训练权重</small>
+                {weightActions}
               </div>
             ) : !usesAssets ? (
               <div className="training-ws-field training-ws-field-wide">
@@ -363,31 +390,7 @@ export function TrainingConfigPanel({
                 ))}
                 {!modelInList && <option value="__custom__">{form.model}</option>}
               </select>
-              {/* （lg0219）权重必须先下载；下载中/已就绪时按钮置灰，切换权重后重新判断 */}
-              <div className="training-weight-actions">
-                <button
-                  type="button"
-                  className="button"
-                  disabled={weightBusy || !weight || weight.ready || weight.download.status === "downloading"}
-                  onClick={() => void downloadWeight()}
-                >
-                  {weight?.download.status === "downloading"
-                    ? `下载中 ${weight.download.percent.toFixed(1)}%`
-                    : weight?.ready
-                      ? "已下载"
-                      : weightBusy
-                        ? "准备中…"
-                        : "下载权重"}
-                </button>
-                <small className={`training-weight-state${weight?.ready ? " ready" : ""}`}>
-                  {weight?.ready
-                    ? "本地已就绪，可直接训练"
-                    : weight?.download.status === "failed"
-                      ? `下载失败：${weight.download.error ?? "未知原因"}`
-                      : "尚未下载，请先点击下载"}
-                </small>
-              </div>
-              {weightError ? <small className="annotation-form-error">{weightError}</small> : null}
+              {weightActions}
             </div>
             {!modelInList && (
               <div className="training-ws-field training-ws-field-wide">

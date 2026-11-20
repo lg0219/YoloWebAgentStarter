@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_session, get_settings, get_training_service
 from app.core.config import Settings
 from app.engines.registry import engine_capabilities
+from app.engines import weight_prep
 from app.training import weights as weight_service
 from app.training.schemas import (
     TrainingLogResponse,
@@ -38,8 +39,15 @@ def list_engines() -> list[dict]:
 
 
 # （lg0219）预训练权重：状态查询与手动下载（训练前必须完成下载）
+# engine 非 yolo 时交给框架侧准备（RF-DETR / 独立版 RT-DETR）
 @router.get("/weights/status")
-def weight_status(model: str = Query(...), settings: Settings = Depends(get_settings)) -> dict:
+def weight_status(
+    model: str = Query(...),
+    engine: str = Query("yolo"),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    if weight_prep.supports(engine):
+        return weight_prep.status(engine, model)
     info = weight_service.check_weight(model, settings)
     state = weight_service.download_state(info["name"])
     return {**info, "download": state}
@@ -47,11 +55,21 @@ def weight_status(model: str = Query(...), settings: Settings = Depends(get_sett
 
 @router.post("/weights/download")
 def weight_download(payload: dict, settings: Settings = Depends(get_settings)) -> dict:
+    engine = str(payload.get("engine") or "yolo")
+    if weight_prep.supports(engine):
+        prepared = weight_prep.start(engine, str(payload.get("model") or ""))
+        return prepared["download"]
     return weight_service.start_download(str(payload.get("model") or ""), settings)
 
 
 @router.get("/weights/download")
-def weight_download_state(model: str = Query(...), settings: Settings = Depends(get_settings)) -> dict:
+def weight_download_state(
+    model: str = Query(...),
+    engine: str = Query("yolo"),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    if weight_prep.supports(engine):
+        return weight_prep.status(engine, model)["download"]
     return weight_service.download_state(model.strip())
 
 
