@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
 
 from sqlalchemy import func, select
@@ -14,8 +15,10 @@ from app.core.task_types import TaskType
 from app.dataset.exchange.yolo import export_dataset_directory
 from app.dataset.service import get_dataset
 from app.dataset.validation import validate_dataset
+from app.engines.base import TrainSpec
+from app.engines.registry import configured_engine_key, get_engine
 from app.training.artifacts.checkpoints import checkpoint_paths
-from app.training.config import build_training_command, resolve_model_reference, validate_model_family
+from app.training.config import resolve_model_reference, validate_model_family
 from app.training.observability.log_store import TrainingLogStore
 from app.training.observability.summary import write_training_summary
 from app.training.observability.telemetry import TrainingTelemetryService
@@ -127,21 +130,31 @@ class TrainingService:
                     "label_count",
                 )
             }
-            command = build_training_command(
-                task_type=task_type,
-                model=model_reference,
-                data_yaml=data_yaml,
-                run_dir=str(run_dir),
-                epochs=payload.epochs,
-                img_size=payload.img_size,
-                batch_size=payload.batch_size,
-                device=payload.device,
-                workers=payload.workers,
-                seed=payload.seed,
-                optimizer=payload.optimizer,
-                lr0=payload.lr0,
-                patience=payload.patience,
-                resume=resume_epoch,
+            engine_key = (payload.engine or "").strip() or configured_engine_key(self.storage.data_dir)
+            engine = get_engine(engine_key)
+            if not engine.supports_task(task_type):
+                raise ValidationError(
+                    "engine_task_unsupported",
+                    f"{engine.info.display_name} 不支持 {task_type.value} 任务，请更换引擎或任务类型。",
+                    details={"engine": engine_key, "task_type": task_type.value},
+                )
+            command_args = engine.build_train_argv(
+                TrainSpec(
+                    task_type=task_type,
+                    model=model_reference,
+                    data=data_yaml,
+                    run_dir=str(run_dir),
+                    epochs=payload.epochs,
+                    img_size=payload.img_size,
+                    batch_size=payload.batch_size,
+                    device=payload.device,
+                    workers=payload.workers,
+                    seed=payload.seed,
+                    optimizer=payload.optimizer,
+                    lr0=payload.lr0,
+                    patience=payload.patience,
+                    resume=resume_epoch,
+                )
             )
             task = TrainingTask(
                 id=resolved_task_id,
@@ -163,10 +176,11 @@ class TrainingService:
                 patience=payload.patience,
                 config_json={
                     **payload.model_dump(),
+                    "engine": engine_key,
                     **({"resume_source_task_id": resume_source_task_id, "resume_epoch": resume_epoch} if resume_source_task_id else {}),
                 },
-                command_args_json=command.args,
-                command_preview=command.readable,
+                command_args_json=command_args,
+                command_preview=shlex.join(command_args),
                 export_path=str(export["root"]),
                 data_yaml_path=data_yaml,
                 export_stats_json=export_stats,

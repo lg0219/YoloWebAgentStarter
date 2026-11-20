@@ -19,7 +19,7 @@ import {
   type TrainingFormState,
 } from "../training/helpers";
 import { formatEtaSeconds, parseTrainingLogs } from "../training/trainingLogParse";
-import type { Dataset, TaskType, TrainingDevice, TrainingLog, TrainingSummary, TrainingTask } from "../types";
+import type { Dataset, TaskType, TrainingDevice, TrainingEngineCapability, TrainingLog, TrainingSummary, TrainingTask } from "../types";
 
 interface Props {
   datasets: Dataset[];
@@ -41,6 +41,8 @@ export function TrainingView({ datasets, dataset, onDatasetChange, onOpenModels,
   const [form, setForm] = useState<TrainingFormState>(() => defaultForm(dataset.task_type));
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [devices, setDevices] = useState<TrainingDevice[]>([]);
+  // （lg0219）可用训练引擎
+  const [engines, setEngines] = useState<TrainingEngineCapability[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -102,6 +104,16 @@ export function TrainingView({ datasets, dataset, onDatasetChange, onOpenModels,
         return first ? { ...prev, gpu_ids: [String(first.index)] } : prev;
       });
     }).catch((reason) => setError(errorMessage(reason)));
+  }, []);
+
+  // （lg0219）拉取可用引擎能力，并让表单默认引擎与设置页保持一致
+  useEffect(() => {
+    api.getTrainingEngines()
+      .then((items) => {
+        setEngines(items);
+        setForm((prev) => (prev.engine ? prev : { ...prev, engine: items[0]?.key ?? "yolo" }));
+      })
+      .catch(() => setEngines([]));
   }, []);
 
   useEffect(() => {
@@ -184,6 +196,7 @@ export function TrainingView({ datasets, dataset, onDatasetChange, onOpenModels,
         name: form.name.trim() || "local-training",
         model: form.model.trim() || defaultModelFor(dataset.task_type),
         task_type: dataset.task_type as TaskType,
+        engine: form.engine,
         epochs: form.epochs,
         img_size: form.img_size,
         batch_size: form.batch_size,
@@ -287,6 +300,9 @@ export function TrainingView({ datasets, dataset, onDatasetChange, onOpenModels,
     return formatEtaSeconds(remaining * perEpochSec);
   })();
 
+  const engineCap = engines.find((item) => item.key === form.engine);
+  const engineSupported = !engineCap || engineCap.task_types.includes(dataset.task_type);
+
   return (
     <main className="training-layout training-workspace-page">
       <header className="training-page-header">
@@ -294,7 +310,7 @@ export function TrainingView({ datasets, dataset, onDatasetChange, onOpenModels,
           <div>
             <span className="eyebrow">LOCAL TRAINING / {dataset.task_type.toUpperCase()}</span>
             <h1>训练工作区</h1>
-            <p className="muted">复用已保存的 train / val / test split，在本机运行 Ultralytics YOLO。</p>
+            <p className="muted">复用已保存的 train / val / test split，在本机运行 {engineCap?.display_name ?? "YOLO"}。</p>
           </div>
         </div>
         <div className="training-page-header-meta" aria-label="当前数据集摘要">
@@ -304,6 +320,23 @@ export function TrainingView({ datasets, dataset, onDatasetChange, onOpenModels,
           <span className="training-chip training-chip--accent">{taskTypeLabel(dataset.task_type)}</span>
         </div>
       </header>
+
+      {/* （lg0219）当前训练引擎常驻提示：引擎在训练表单中切换 */}
+      {engineCap && (
+        <div className={`training-engine-banner${engineSupported ? "" : " training-engine-banner-warn"}`}>
+          <span>
+            当前训练引擎：<strong>{engineCap.display_name}</strong>
+          </span>
+          <span className="muted">
+            支持任务：{engineCap.task_types.map((item) => taskTypeLabel(item as TaskType)).join(" / ")}
+          </span>
+          {!engineSupported && (
+            <span className="training-engine-banner-error">
+              该引擎不支持「{taskTypeLabel(dataset.task_type)}」，请切换引擎或更换数据集
+            </span>
+          )}
+        </div>
+      )}
 
       {notice && <p className="training-workspace-notice">{notice}</p>}
       {error && (
@@ -327,6 +360,7 @@ export function TrainingView({ datasets, dataset, onDatasetChange, onOpenModels,
           <TrainingConfigPanel
             datasets={datasets}
             dataset={dataset}
+            engines={engines}
             form={form}
             preset={preset}
             advancedOpen={advancedOpen}

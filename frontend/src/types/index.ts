@@ -551,3 +551,13 @@ export interface WeightStatus {
   size_bytes: number | null;
   download: WeightDownloadState;
 }
+
+// （lg0219）训练引擎能力：前端据此显示/隐藏参数
+export interface TrainingEngineCapability {
+  key: string;
+  display_name: string;
+  task_types: string[];
+  weight_suffixes: string[];
+  supported_params: string[];
+  fixed_params: Record<string, string>;
+}

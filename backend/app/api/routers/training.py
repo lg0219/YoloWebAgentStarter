@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_session, get_settings, get_training_service
 from app.core.config import Settings
+from app.engines.registry import engine_capabilities
 from app.training import weights as weight_service
 from app.training.schemas import (
     TrainingLogResponse,
@@ -28,6 +29,12 @@ router = APIRouter(prefix="/training", tags=["training"])
 @router.get("/devices", response_model=TrainingDeviceListResponse)
 def list_devices(service: TrainingService = Depends(get_training_service)) -> TrainingDeviceListResponse:
     return TrainingDeviceListResponse(items=service.devices())
+
+
+# （lg0219）可用训练引擎及参数能力，供前端按能力渲染表单
+@router.get("/engines")
+def list_engines() -> list[dict]:
+    return engine_capabilities()
 
 
 # （lg0219）预训练权重：状态查询与手动下载（训练前必须完成下载）

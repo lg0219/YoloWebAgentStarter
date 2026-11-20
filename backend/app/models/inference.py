@@ -3,35 +3,12 @@ from __future__ import annotations
 import tempfile
 import time
 from pathlib import Path
-from typing import Any
-
-from ultralytics import YOLO
 
 from app.core.errors import ValidationError
-from app.models.result_parser import YoloResultParser
+from app.engines.registry import engine_for_weight
+from app.engines.yolo import ModelCache  # 兼容既有调用方与测试（YOLO 模型缓存实现）
 
-
-class ModelCache:
-    """Adapted from upstream ModelCache, limited to managed Ultralytics PT models."""
-
-    _cache: dict[str, Any] = {}
-    _last_access: dict[str, float] = {}
-    _max_size = 3
-
-    @classmethod
-    def get_model(cls, model_id: str, model_path: Path) -> Any:
-        now = time.time()
-        if model_id in cls._cache:
-            cls._last_access[model_id] = now
-            return cls._cache[model_id]
-        if len(cls._cache) >= cls._max_size:
-            oldest = min(cls._last_access, key=cls._last_access.get)
-            cls._cache.pop(oldest, None)
-            cls._last_access.pop(oldest, None)
-        model = YOLO(str(model_path))
-        cls._cache[model_id] = model
-        cls._last_access[model_id] = now
-        return model
+__all__ = ["ModelCache", "run_managed_inference", "run_test_inference"]
 
 
 def run_test_inference(*, model_id: str, model_path: Path, task_type: str, image_bytes: bytes, confidence: float, iou: float, class_names: dict[int, str]) -> dict:
@@ -53,14 +30,16 @@ def run_test_inference(*, model_id: str, model_path: Path, task_type: str, image
 
 
 def run_managed_inference(*, model_id: str, model_path: Path, task_type: str, image_path: Path, confidence: float, iou: float, class_names: dict[int, str]) -> list:
-    """Run the same cached Ultralytics/parser path used by model quick-test on a managed image."""
+    """Run the same cached engine path used by model quick-test on a managed image."""
 
     return _run_inference(model_id, model_path, task_type, image_path, confidence, iou)
 
 
 def _run_inference(model_id: str, model_path: Path, task_type: str, image_path: Path, confidence: float, iou: float) -> list:
-    results = ModelCache.get_model(model_id, model_path).predict(source=str(image_path), conf=confidence, iou=iou, verbose=False)
-    return YoloResultParser().parse(results, task_type)
+    """按权重文件后缀选择引擎推理：.pt 走 YOLO，.pth 走 RF-DETR。"""
+    engine = engine_for_weight(model_path)
+    model = engine.load_model(model_id, model_path)
+    return engine.infer(model, image_path, confidence, iou, task_type)
 
 
 def _serialize_inference_result(model_id: str, task_type: str, class_names: dict[int, str], detections: list) -> dict:

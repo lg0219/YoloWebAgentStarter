@@ -34,6 +34,7 @@ import type {
   DeploymentInfo,
   WeightStatus,
   WeightDownloadState,
+  TrainingEngineCapability,
 } from "../types";
 
 import { apiUrl } from "./runtimeConfig";
@@ -168,6 +169,7 @@ export const api = {
     name: string;
     model: string;
     task_type: TaskType;
+    engine?: string;
     epochs: number;
     img_size: number;
     batch_size: number;
@@ -225,4 +227,6 @@ export const api = {
     request<WeightStatus>(`/api/training/weights/status?model=${encodeURIComponent(model)}`),
   startWeightDownload: (model: string) =>
     request<WeightDownloadState>("/api/training/weights/download", json({ model })),
+  // （lg0219）可用训练引擎及参数能力
+  getTrainingEngines: () => request<TrainingEngineCapability[]>("/api/training/engines"),
 };

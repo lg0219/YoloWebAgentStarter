@@ -2438,3 +2438,28 @@
 .training-weight-state.ready {
   color: #2f855a;
 }
+
+/* （lg0219）训练引擎常驻提示条 */
+.training-engine-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid #dbe2f1;
+  border-radius: 8px;
+  background: #f5f7ff;
+  color: #3157d5;
+  font-size: 13px;
+}
+
+.training-engine-banner-warn {
+  border-color: #f0c9a8;
+  background: #fff7ef;
+  color: #a35a12;
+}
+
+.training-engine-banner-error {
+  font-weight: 600;
+}
