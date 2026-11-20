@@ -15,6 +15,8 @@ class TrainingTaskCreate(BaseModel):
     name: str = Field(default="local-yolo-training", min_length=1, max_length=255)
     model: str = Field(default="yolo11n.pt", min_length=1, max_length=255)
     task_type: TaskType | None = None
+    # （lg0219）本次训练使用的引擎；留空则用设置页的默认值
+    engine: str | None = Field(default=None, max_length=32)
     epochs: int = Field(default=50, ge=1, le=10000)
     img_size: int = Field(default=640, ge=32, le=4096)
     batch_size: int = Field(default=16, ge=1, le=4096)
