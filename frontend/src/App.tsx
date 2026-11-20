@@ -8,12 +8,13 @@ import { ModelsView } from "./pages/ModelsView";
 import { SettingsView } from "./pages/SettingsView";
 import { LogsView } from "./pages/LogsView";
 import { AgentView, type AgentPageContext } from "./pages/AgentView";
+import { PipelineView } from "./pages/PipelineView";
 import { AutoAnnotationModal } from "./components/AutoAnnotationModal";
 import { ImportCenterModal } from "./components/ImportCenterModal";
 import { readLocale, saveLocale, type AppLocale } from "./locale";
 import type { Annotation, BBox, ClassLabel, Dataset, DatasetQualityReport, DuplicateReport, ImageItem, SamCapabilities, SamPrediction, SplitName, TaskType, ValidationReport } from "./types";
 
-type View = "workspace" | "annotation" | "training" | "models" | "agent" | "settings-llm" | "settings-sam" | "settings-annotation" | "settings-language" | "logs";
+type View = "workspace" | "annotation" | "training" | "models" | "pipeline" | "agent" | "settings-llm" | "settings-sam" | "settings-annotation" | "settings-language" | "logs";
 type CardReportKind = "validation" | "quality" | "duplicates";
 const ANNOTATION_IMAGE_PAGE_SIZE = 20;
 
@@ -170,7 +171,7 @@ export default function App() {
         void loadDataset(datasets[0], section);
         return;
       }
-      const globalSection = section === "settings" || section === "logs" || section === "agent";
+      const globalSection = section === "settings" || section === "logs" || section === "agent" || section === "pipeline";
       if (!globalSection && section !== "workspace" && !selected) {
         setNotice("请先创建或选择一个数据集。");
         return;
@@ -318,6 +319,8 @@ export default function App() {
             api.getSystemInfo().then((info) => setSamCapabilities(info.sam)).catch(() => undefined);
           }}
         />
+      ) : view === "pipeline" ? (
+        <PipelineView />
       ) : view === "logs" ? (
         <LogsView locale={locale} />
       ) : view === "agent" ? (

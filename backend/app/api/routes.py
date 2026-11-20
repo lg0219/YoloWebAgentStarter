@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.routers import datasets, models, sam, settings, system, training
+from app.api.routers import datasets, models, pipeline, sam, settings, system, training
 from app.agent.router import router as agent_router
 from app.auto_annotation.router import dataset_router as auto_annotation_dataset_router, task_router as auto_annotation_task_router
 from app.logs.router import router as logs_router
@@ -18,4 +18,5 @@ api_router.include_router(logs_router)
 api_router.include_router(auto_annotation_dataset_router)
 api_router.include_router(auto_annotation_task_router)
 api_router.include_router(video_import_router)
+api_router.include_router(pipeline.router)
 api_router.include_router(agent_router)

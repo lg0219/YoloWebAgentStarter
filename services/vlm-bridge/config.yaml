@@ -1,0 +1,76 @@
+# vlm-bridge 配置：模型注册表 + 流水线模板
+# 加模型 = 加一段；换流程 = 加/改模板；不碰代码
+
+models:
+  yolo_dirty:
+    type: detect
+    path: /home/linux/YoloWebAgentStarter/data/models/model_train_b80c7cc9d0a240a2b776584e0178b26c_best/best.pt
+    conf: 0.25
+    desc: 表面不干净（自训 best.pt）
+  yolo_s:
+    type: detect
+    path: /home/linux/YoloWebAgentStarter/data/models/yolo26s.pt
+    conf: 0.25
+    desc: YOLO26s 通用预训练（对比用）
+  sam_b:
+    type: segment
+    path: /home/linux/YoloWebAgentStarter/data/models/sam2_b.pt
+    desc: SAM2 base
+  internvl_1b:
+    type: reason
+    path: /home/linux/models/InternVL2-1B
+    desc: InternVL2-1B（中文）
+
+  # 可选：云端多模态大模型，只用于「解释」阶段。
+  # 不配置就完全不启用，现有行为不变。
+  # 密钥不要写在这里，放到环境变量里，变量名由 api_key_env 指定。
+  # cloud_vlm:
+  #   type: reason_api
+  #   base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  #   model: qwen-vl-max
+  #   api_key_env: YWA_CLOUD_VLM_KEY
+  #   max_tokens: 256
+  #   timeout: 60
+  #   desc: 云端解释（可选）
+
+templates:
+  surface_dirty:
+    name: 表面脏污（检测+分割+解释）
+    stages:
+      detect:
+        model: yolo_dirty
+      segment:
+        model: sam_b
+      reason:
+        model: internvl_1b
+        prompt: |
+          你是工业质检助手。图中已框出疑似不干净区域，检测结果见上。
+          请用中文、三行以内说明：1) 位置 2) 可能的脏污类型 3) 严重程度（轻/中/重）。
+          不要编造图中没有的东西。
+  detect_segment:
+    name: 检测 + 分割（量尺寸，不解释）
+    stages:
+      detect:
+        model: yolo_dirty
+      segment:
+        model: sam_b
+  detect_only:
+    name: 仅检测（最快，约 0.02 秒/张）
+    stages:
+      detect:
+        model: yolo_dirty
+
+  # 可选：检测 + 分割在本地，解释走云端。需要先启用上面的 cloud_vlm。
+  # surface_dirty_cloud:
+  #   name: 表面脏污（检测+分割本地，解释走云端）
+  #   stages:
+  #     detect:
+  #       model: yolo_dirty
+  #     segment:
+  #       model: sam_b
+  #     reason:
+  #       model: cloud_vlm
+  #       prompt: |
+  #         你是工业质检助手。图中已框出疑似不干净区域，检测结果见上。
+  #         请用中文、三行以内说明：1) 位置 2) 可能的脏污类型 3) 严重程度（轻/中/重）。
+  #         不要编造图中没有的东西。
