@@ -1,5 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <rect width="64" height="64" rx="14" fill="#3157d5"/>
-  <path d="M-20 1493H401L741 961L1081 1493H1503L934 629V0H549V629Z" fill="#ffffff" transform="translate(12.80,13.73) scale(0.0252)"/>
-  <path d="M23.4,9.9 L9.9,9.9 L9.9,23.4 M40.6,54.1 L54.1,54.1 L54.1,40.6" stroke="#ffd166" stroke-width="3.52" stroke-linecap="round" fill="none"/>
+  <!-- 白色 Y：两臂向下汇聚、中竖向下延伸（正立，非倒置） -->
+  <path d="M18 15 L32 34 L46 15" stroke="#ffffff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M32 34 L32 51" stroke="#ffffff" stroke-width="10" stroke-linecap="round" fill="none"/>
+  <!-- 四角检测框角标：左上 + 右下 -->
+  <path d="M23.4 9.9 L9.9 9.9 L9.9 23.4" stroke="#ffd166" stroke-width="3.52" stroke-linecap="round" fill="none"/>
+  <path d="M40.6 54.1 L54.1 54.1 L54.1 40.6" stroke="#ffd166" stroke-width="3.52" stroke-linecap="round" fill="none"/>
 </svg>
