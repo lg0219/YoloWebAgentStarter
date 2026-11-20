@@ -27,10 +27,14 @@ def test_rfdetr_variant_maps_to_official_file() -> None:
         weight_prep._rf_target("huge")
 
 
-def test_rtdetrv2_variant_maps_to_backbone_weight() -> None:
-    path, filename = weight_prep._rtdetrv2_target("r50")
-    assert filename == "ResNet50_vd_ssld_v2_pretrained_from_paddle.pth"
+def test_rtdetrv2_variant_maps_to_full_coco_weight() -> None:
+    path, filename = weight_prep._rtdetrv2_target("r18")
+    assert filename == "rtdetrv2_r18vd_120e_coco_rerun_48.1.pth"
     assert path.name == filename
+
+    r50_path, r50_name = weight_prep._rtdetrv2_target("r50")
+    assert r50_name == "rtdetrv2_r50vd_6x_coco_ema.pth"
+    assert r50_path.name == r50_name
 
     with pytest.raises(ValidationError):
         weight_prep._rtdetrv2_target("r999")

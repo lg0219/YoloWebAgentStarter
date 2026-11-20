@@ -9,6 +9,9 @@
 - 修复 RF-DETR 训练启动即失败（缺少 `pytorch_lightning`）的问题：依赖改为 `rfdetr[train,loggers]`，并记录绕开 pip 依赖解析卡住的装法。
 - 修复 RF-DETR 训练参数与新版框架不匹配的问题：`num_classes` 改 `class_names`、`device` 改 `accelerator`/`devices`，评估后端固定 `faster_coco_eval`（vernier 需要 numpy 2，与项目基线冲突）。
 - RF-DETR 训练产物归位到应用约定：`weights/best.pt`、`weights/last.pt` 与 `results.csv`，并在同目录写引擎旁注，使推理能按 RF-DETR 加载。
+- RT-DETR（独立版 v2）改为以官方**完整 COCO 预训练权重**为起点（每档一个，r18 约 77MB），不再只下骨干、不再从零训练。
+- 下载器统一：RF-DETR 与 RT-DETR 共用并行分段下载，RT 的「下载权重」按钮也显示实时百分比。
+- 修复训练页「实验历史」被内容横向撑开、卡片列数随内容变化的问题（收缩链 + 页面横向溢出保护 + 按钮定宽）。
 
 ## lg0219-v0.2.0（2026-11-20）
 

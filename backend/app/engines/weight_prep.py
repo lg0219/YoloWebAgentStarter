@@ -70,17 +70,16 @@ def _rf_target(name: str) -> tuple[Path, str]:
 
 
 def _rtdetrv2_target(name: str) -> tuple[Path, str]:
-    from app.engines.rtdetrv2_weights import VARIANT_DEPTH, backbone_path
+    from app.engines.rtdetrv2_weights import FULL_WEIGHTS, weight_path
 
     variant = (name or "").strip().lower() or "r18"
-    depth = VARIANT_DEPTH.get(variant)
-    if depth is None:
+    if variant not in FULL_WEIGHTS:
         raise ValidationError(
             "weight_variant_unknown",
             f"未知的 RT-DETR（独立版）档位：{name}",
-            details={"available": sorted(VARIANT_DEPTH)},
+            details={"available": sorted(FULL_WEIGHTS)},
         )
-    path = backbone_path(depth)
+    path = weight_path(variant)
     return path, path.name
 
 
@@ -110,7 +109,7 @@ def _download_rfdetr(name: str) -> Path:
     """并行下载 RF-DETR 官方权重；框架自带的单连接在国内太慢。"""
     from rfdetr.assets.model_weights import ModelWeights
 
-    from app.engines import rfdetr_download
+    from app.engines import engine_download
 
     path, filename = _rf_target(name)
     url = ModelWeights.get_url(filename)
@@ -122,7 +121,7 @@ def _download_rfdetr(name: str) -> Path:
         percent = round(done * 100.0 / total, 1) if total else 0.0
         _set_state(state_key, downloaded=done, total=total, percent=percent)
 
-    result = rfdetr_download.download(url, path, on_progress=on_progress)
+    result = engine_download.download(url, path, on_progress=on_progress)
     expected = ModelWeights.get_md5(filename)
     if expected:
         import hashlib
@@ -137,6 +136,20 @@ def _download_rfdetr(name: str) -> Path:
     return result
 
 
+def _download_rtdetrv2(name: str) -> Path:
+    """下载该档位的完整 COCO 权重（带进度）。"""
+    from app.engines.rtdetrv2_weights import ensure_weight
+
+    path, filename = _rtdetrv2_target(name)
+    state_key = f"rtdetrv2:{filename}"
+
+    def on_progress(done: int, total: int) -> None:
+        percent = round(done * 100.0 / total, 1) if total else 0.0
+        _set_state(state_key, downloaded=done, total=total, percent=percent)
+
+    return ensure_weight((name or "r18").strip().lower() or "r18", on_progress=on_progress)
+
+
 def _worker(engine_key: str, name: str) -> None:
     path, filename = _target(engine_key, name)
     key = f"{engine_key}:{filename}"
@@ -144,9 +157,7 @@ def _worker(engine_key: str, name: str) -> None:
         if engine_key == "rfdetr":
             _download_rfdetr(name)
         else:
-            from app.engines.rtdetrv2_weights import VARIANT_DEPTH, ensure_backbone
-
-            ensure_backbone(VARIANT_DEPTH[(name or "r18").strip().lower() or "r18"])
+            _download_rtdetrv2(name)
         _set_state(key, status="ready", percent=100.0, error=None)
     except Exception as exc:  # 网络/磁盘问题都记录下来给界面
         _set_state(key, status="failed", error=f"{type(exc).__name__}: {exc}")
