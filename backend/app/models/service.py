@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from sqlalchemy import func, select
@@ -65,6 +66,13 @@ class ModelService:
                     session.flush()
                     created_ids.append(model_id)
                 destination = self.storage.copy_model_artifact(source_path, model.id, f"{artifact_type}.pt")
+                # 独立版 RT-DETR 等引擎把结构信息写在同名 .json 旁注里，推理时需要一起带走
+                sidecar_source = source_path.with_suffix(".json")
+                if sidecar_source.is_file():
+                    try:
+                        shutil.copy2(sidecar_source, destination.with_suffix(".json"))
+                    except OSError:
+                        pass
                 model.name = model.name or f"{task.name} ({artifact_type})"
                 model.dataset_id = task.dataset_id
                 model.task_type = task.task_type

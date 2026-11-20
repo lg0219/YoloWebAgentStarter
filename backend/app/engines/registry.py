@@ -48,6 +48,12 @@ def engine_for_weight(path: str | Path, fallback: str | None = None) -> ModelEng
     """按权重文件后缀推断引擎；无法判断时退回指定引擎或默认引擎。"""
     suffix = Path(str(path)).suffix.lower()
     _bootstrap()
+    # .pt / .pth 都可能是独立版 RT-DETR 的产物；带训练旁注文件的优先判给它
+    if suffix in {".pt", ".pth"}:
+        from app.engines.rtdetrv2 import read_sidecar
+
+        if read_sidecar(Path(str(path))) is not None:
+            return get_engine("rtdetrv2")
     for engine in _ENGINES.values():
         if suffix in engine.info.weight_suffixes:
             return engine

@@ -125,6 +125,22 @@ def test_weight_suffix_judgement() -> None:
     assert not rfdetr.accepts_weight("yolo11n.pt")
 
 
+def test_rtdetrv2_sidecar_routes_pth_to_standalone_engine(tmp_path: Path) -> None:
+    """带结构旁注的 .pt/.pth 要判给独立版，而不是 RF-DETR 或 Ultralytics。"""
+
+    plain = tmp_path / "plain.pth"
+    plain.write_bytes(b"x")
+    assert engine_for_weight(plain).info.key == "rfdetr"
+
+    marked = tmp_path / "best.pt"
+    marked.write_bytes(b"x")
+    (tmp_path / "best.json").write_text(
+        json.dumps({"engine": "rtdetrv2", "variant": "r18", "resolution": 320, "num_classes": 1, "names": ["a"]}),
+        encoding="utf-8",
+    )
+    assert engine_for_weight(marked).info.key == "rtdetrv2"
+
+
 def test_rtdetrv2_is_detect_only_and_allows_blank_model() -> None:
     engine = get_engine("rtdetrv2")
     assert engine.info.task_types == (TaskType.DETECT,)

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -46,6 +47,7 @@ def build_config(
     batch_size: int,
     resolution: int,
     workers: int,
+    backbone: Path | None,
 ) -> Path:
     root = vendor_root()
     include = (root / VARIANTS[variant]).as_posix()
@@ -65,8 +67,8 @@ def build_config(
         f"epoches: {int(epochs)}",
         "",
         "PResNet:",
-        # 内嵌版不联网下载主干权重；从零训练，需要预训练权重时用 --weights 指定
-        "  pretrained: False",
+        # 有预训练主干就用本地路径加载；没有才退化成从零训练
+        f"  pretrained: '{backbone.as_posix()}'" if backbone else "  pretrained: False",
         "",
         "train_dataloader:",
         "  dataset:",
@@ -111,6 +113,22 @@ def _copy_checkpoints(output_dir: Path) -> None:
             shutil.copyfile(source, weights / f"{name}.pt")
 
 
+def _write_sidecar(output_dir: Path, *, variant: str, resolution: int, names: list[str]) -> None:
+    """写推理用的旁注文件：记录档位、输入尺寸与类别，供加载模型时还原结构。"""
+    weights = output_dir / "weights"
+    weights.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "engine": "rtdetrv2",
+        "variant": variant,
+        "resolution": int(resolution),
+        "num_classes": len(names),
+        "names": names,
+    }
+    text = json.dumps(payload, ensure_ascii=False, indent=2)
+    for name in ("best", "last"):
+        (weights / f"{name}.json").write_text(text, encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="YWA RT-DETRv2 runner")
     parser.add_argument("--dataset-dir", required=True)
@@ -123,6 +141,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--workers", type=int, default=0)
     parser.add_argument("--variant", default=DEFAULT_VARIANT)
     parser.add_argument("--weights", default="")
+    parser.add_argument("--no-pretrained", action="store_true")
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args(argv)
 
@@ -135,6 +154,17 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[ywa] coco ready: {data['splits']}", flush=True)
 
     variant = _normalise_variant(args.variant)
+
+    backbone: Path | None = None
+    if args.weights:
+        print(f"[ywa] 使用外部权重续训：{args.weights}", flush=True)
+    elif not args.no_pretrained:
+        from app.engines.rtdetrv2_weights import VARIANT_DEPTH, ensure_backbone
+
+        backbone = ensure_backbone(VARIANT_DEPTH[variant])
+    else:
+        print("[ywa] 已关闭预训练主干，本次从零训练", flush=True)
+
     config_path = build_config(
         variant=variant,
         output_dir=output_dir,
@@ -144,6 +174,7 @@ def main(argv: list[str] | None = None) -> int:
         batch_size=args.batch_size,
         resolution=args.resolution,
         workers=args.workers,
+        backbone=backbone,
     )
     print(f"[ywa] config: {config_path} (variant={variant})", flush=True)
 
@@ -171,6 +202,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     train_main(train_args)
     _copy_checkpoints(output_dir)
+    _write_sidecar(output_dir, variant=variant, resolution=args.resolution, names=data["names"])
     print("[ywa] checkpoints copied to weights/", flush=True)
     return 0
 

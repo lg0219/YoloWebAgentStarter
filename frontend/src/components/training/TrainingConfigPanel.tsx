@@ -320,7 +320,7 @@ export function TrainingConfigPanel({
                     <option key={choice} value={choice}>{choice}</option>
                   ))}
                 </select>
-                <small className="training-weight-state">选档位即可训练，无需下载权重</small>
+                <small className="training-weight-state">选档位即可训练；首次会自动下载主干预训练权重</small>
               </div>
             ) : !usesAssets ? (
               <div className="training-ws-field training-ws-field-wide">
