@@ -7,6 +7,8 @@
 - 修复档位型引擎点击开始会整页刷新回数据集页、训练任务未提交的问题。
 - 修复 RF-DETR 权重下载写入 `~/.roboflow` 时在受限账户下报 `WinError 5` 的问题：缓存目录默认改到项目内 `weights/rfdetr/`，显式设置 `RF_HOME` 时仍尊重用户选择。
 - 修复 RF-DETR 训练启动即失败（缺少 `pytorch_lightning`）的问题：依赖改为 `rfdetr[train,loggers]`，并记录绕开 pip 依赖解析卡住的装法。
+- 修复 RF-DETR 训练参数与新版框架不匹配的问题：`num_classes` 改 `class_names`、`device` 改 `accelerator`/`devices`，评估后端固定 `faster_coco_eval`（vernier 需要 numpy 2，与项目基线冲突）。
+- RF-DETR 训练产物归位到应用约定：`weights/best.pt`、`weights/last.pt` 与 `results.csv`，并在同目录写引擎旁注，使推理能按 RF-DETR 加载。
 
 ## lg0219-v0.2.0（2026-11-20）
 

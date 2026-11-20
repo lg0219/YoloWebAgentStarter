@@ -44,16 +44,31 @@ def get_engine(key: str | None = None) -> ModelEngine:
     return engine
 
 
+def _engine_marker(path: str | Path) -> str | None:
+    """读取训练时写下的结构旁注，返回它声明的引擎 key。"""
+    candidate = Path(str(path))
+    for sidecar in (candidate.with_suffix(".json"), candidate.parent / "best.json"):
+        if not sidecar.is_file():
+            continue
+        try:
+            data = json.loads(sidecar.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        engine = str(data.get("engine") or "").strip()
+        if engine:
+            return engine
+    return None
+
+
 def engine_for_weight(path: str | Path, fallback: str | None = None) -> ModelEngine:
     """按权重文件后缀推断引擎；无法判断时退回指定引擎或默认引擎。"""
     suffix = Path(str(path)).suffix.lower()
     _bootstrap()
-    # .pt / .pth 都可能是独立版 RT-DETR 的产物；带训练旁注文件的优先判给它
+    # .pt / .pth 都可能来自第三方框架；带旁注的优先按旁注里的引擎走
     if suffix in {".pt", ".pth"}:
-        from app.engines.rtdetrv2 import read_sidecar
-
-        if read_sidecar(Path(str(path))) is not None:
-            return get_engine("rtdetrv2")
+        marker = _engine_marker(path)
+        if marker and marker in _ENGINES:
+            return get_engine(marker)
     for engine in _ENGINES.values():
         if suffix in engine.info.weight_suffixes:
             return engine
