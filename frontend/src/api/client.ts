@@ -180,6 +180,7 @@ export const api = {
     optimizer?: string;
     lr0?: number;
     patience?: number;
+    deterministic?: boolean;
   }) => request<TrainingTask>("/api/training/tasks", json(payload)),
   stopTrainingTask: (taskId: string) => request<TrainingTask>(`/api/training/tasks/${taskId}/stop`, { method: "POST" }),
   resumeTrainingTask: (taskId: string, data: { name?: string; epochs?: number; resume_epoch?: boolean } = {}) => request<TrainingTask>(`/api/training/tasks/${taskId}/resume`, json(data)),

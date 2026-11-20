@@ -78,6 +78,7 @@ def build_training_command(
     lr0: float | None = None,
     patience: int | None = None,
     resume: bool = False,
+    deterministic: bool | None = None,
 ) -> TrainingCommand:
     run_path = Path(run_dir).resolve()
     args = [
@@ -103,6 +104,9 @@ def build_training_command(
         args.append(f"lr0={lr0}")
     if patience is not None:
         args.append(f"patience={patience}")
+    if deterministic is not None:
+        # 显式传 True/False：Ultralytics 默认值是 True，显式写出来便于在命令预览里核对
+        args.append(f"deterministic={'True' if deterministic else 'False'}")
     if resume:
         # The selected managed checkpoint is already the model reference. This
         # matches upstream: loading that model and passing resume=True makes

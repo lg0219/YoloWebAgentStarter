@@ -41,7 +41,7 @@ npm --prefix frontend install
 
 ## 3. 训练与导出
 
-打开训练工作区，选择与数据集类型匹配的 YOLOv8、YOLO11 或 YOLO26 基础权重（例如 `yolov8n.pt`、`yolo11n-seg.pt` 或 `yolo26n-obb.pt`），然后选择 CPU、MPS 或 CUDA。存在多个 CUDA 设备时，可选择两个或更多 GPU，将 `device=0,1` 传递给本地 Ultralytics DDP。首次使用命名权重训练时，Ultralytics 可能会下载权重。任务完成后，`best.pt` 和 `last.pt` 会登记到 `data/models/` 下；模型工作区可以下载它们，或生成静态 FP32 ONNX 文件。
+打开训练工作区，选择与数据集类型匹配的 YOLOv8、YOLO11、YOLO26 或 RT-DETR 基础权重（例如 `yolov8n.pt`、`yolo11n-seg.pt`、`yolo26n-obb.pt` 或 `rtdetr-l.pt`），然后选择 CPU、MPS 或 CUDA。存在多个 CUDA 设备时，可选择两个或更多 GPU，将 `device=0,1` 传递给本地 Ultralytics DDP。首次使用命名权重训练时，Ultralytics 可能会下载权重。任务完成后，`best.pt` 和 `last.pt` 会登记到 `data/models/` 下；模型工作区可以下载它们，或生成静态 FP32 ONNX 文件。RT-DETR 只支持检测任务，官方仅提供 L / X 两档权重，显存占用明显高于同档 YOLO，建议把批大小调小。
 
 使用左侧边栏的“日志”页面查看本地后端运行日志的有限末尾内容。语言设置会改变工作区外壳以及新的设置/日志页面；该偏好只保存在浏览器中。
 

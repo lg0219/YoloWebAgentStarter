@@ -28,6 +28,17 @@ vi.mock("../api/client", () => ({
     }),
     downloadCheckpointUrl: vi.fn().mockReturnValue("#"),
     autoSplitImages: vi.fn(),
+    // （lg0219）训练工作区挂载时会拉取引擎能力；缺失会让整页抛错，旧用例因此全挂
+    getTrainingEngines: vi.fn().mockResolvedValue([
+      {
+        key: "yolo",
+        display_name: "Ultralytics YOLO",
+        task_types: ["detect", "segment", "obb", "classify"],
+        weight_suffixes: [".pt", ".onnx", ".yaml"],
+        supported_params: ["model", "epochs", "batch_size", "img_size", "device", "workers", "seed"],
+        fixed_params: {},
+      },
+    ]),
   },
 }));
 

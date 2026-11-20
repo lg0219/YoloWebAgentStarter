@@ -207,6 +207,7 @@ export function TrainingView({ datasets, dataset, onDatasetChange, onOpenModels,
         optimizer: form.optimizer.trim() || undefined,
         lr0: Number.isFinite(lr0) ? lr0 : undefined,
         patience: Number.isFinite(patience) ? patience : undefined,
+        deterministic: form.deterministic,
       });
       setTasks((items) => [task, ...items]);
       setDetailTaskId(task.id);

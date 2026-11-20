@@ -27,6 +27,8 @@ class TrainingTaskCreate(BaseModel):
     optimizer: str | None = Field(default=None, max_length=64)
     lr0: float | None = Field(default=None, gt=0)
     patience: int | None = Field(default=None, ge=0)
+    # 确定性训练默认开启（与 Ultralytics 默认一致）；个别模型或显卡/NPU 后端不支持时可关闭
+    deterministic: bool = Field(default=True)
 
 
 class TrainingTaskResumeRequest(BaseModel):
@@ -56,6 +58,7 @@ class TrainingTaskResponse(BaseModel):
     optimizer: str | None
     lr0: float | None
     patience: int | None
+    deterministic: bool = True
     command_preview: str | None
     export_path: str | None
     data_yaml_path: str | None

@@ -675,3 +675,21 @@ def test_training_runner_reads_output_as_utf8(tmp_path, monkeypatch):
 
     assert captured["encoding"] == "utf-8"
     assert captured["errors"] == "replace"
+
+
+def test_rtdetr_weights_are_detection_only():
+    """RT-DETR 由 Ultralytics 内置，只能做检测；后端按权重名判定族系时必须拒绝其它任务。"""
+    from app.core.errors import ValidationError
+    from app.core.task_types import TaskType
+    from app.training.config import infer_model_family, validate_model_family
+
+    assert infer_model_family("rtdetr-l.pt") is TaskType.DETECT
+    assert infer_model_family("rtdetr-x.pt") is TaskType.DETECT
+    assert infer_model_family("E:/weights/rtdetr-l.pt") is TaskType.DETECT
+
+    validate_model_family(TaskType.DETECT, "rtdetr-l.pt")
+
+    for task in (TaskType.SEGMENT, TaskType.OBB, TaskType.CLASSIFY):
+        with pytest.raises(ValidationError) as excinfo:
+            validate_model_family(task, "rtdetr-l.pt")
+        assert excinfo.value.error_code == "model_task_mismatch"

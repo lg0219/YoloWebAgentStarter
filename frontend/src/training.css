@@ -509,6 +509,47 @@
   grid-column: 1 / -1;
 }
 
+/* 确定性训练开关：独占一行、扁平样式，避免在多列表单里凸出一块卡片。
+   勾选框 + 标题 +「?」在左，当前状态说明靠右；「?」仍是唯一帮助入口。 */
+.training-ws-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid var(--control-border);
+  color: var(--text-dark);
+}
+
+.training-ws-switch input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  accent-color: #3157d5;
+  cursor: pointer;
+}
+
+.training-ws-switch .training-ws-field-label {
+  margin-bottom: 0;
+  color: var(--text-dark);
+}
+
+.training-ws-switch label {
+  cursor: pointer;
+}
+
+.training-ws-switch small {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
 /* 2026-11-05：训练配置字段「?」帮助气泡（点击图标切换，Esc 或点击外部关闭）
    2026-11-05 二次修正：气泡左对齐（左边缘与「?」对齐），避免居中时向左展开被遮挡；
    「?」独立于 label，flex 布局下不拉伸，是行内唯一特殊交互点。 */
