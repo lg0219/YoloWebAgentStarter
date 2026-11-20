@@ -146,6 +146,7 @@ export function TrainingConfigPanel({
     patience: fieldId("patience"),
     workers: fieldId("workers"),
     engine: fieldId("engine"),
+    deterministic: fieldId("deterministic"),
   };
 
   // （lg0219）按所选引擎的能力渲染参数：不支持的隐藏，固定的以只读说明展示
@@ -469,6 +470,21 @@ export function TrainingConfigPanel({
                     <FieldHelp text="训练时同时运行的进程数——这些进程在后台准备数据（读图、改尺寸、打包好喂给模型）。多开几个，模型就不用干等数据；但开太多会和其他程序抢 CPU。默认 2。" />
                   </span>
                   <input id={ids.workers} type="number" min={0} value={form.workers} onChange={(event) => setForm((prev) => ({ ...prev, workers: Number(event.target.value) }))} />
+                </div>
+              ) : null}
+              {supports("deterministic") ? (
+                <div className="training-ws-switch training-ws-field-wide">
+                  <input
+                    id={ids.deterministic}
+                    type="checkbox"
+                    checked={form.deterministic}
+                    onChange={(event) => setForm((prev) => ({ ...prev, deterministic: event.target.checked }))}
+                  />
+                  <span className="training-ws-field-label">
+                    <label htmlFor={ids.deterministic}>确定性训练</label>
+                    <FieldHelp text="开启后，同样的数据配上同样的种子，每次训练都会走出完全一样的过程，方便对比、便于复现。代价是略慢一点，因为程序不再挑那些更快但结果不固定的算法。将来换到显卡或 NPU 上训练 RT-DETR 这类模型时，个别算子不支持确定性计算，建议关掉；关掉不影响训练效果，只是每次结果会有细微差别。Ultralytics 官方默认也是开启，本项目保持一致。" />
+                  </span>
+                  <small>{form.deterministic ? "已开启：结果可复现，速度略慢" : "已关闭：速度略快，结果不逐次一致"}</small>
                 </div>
               ) : null}
             </div>

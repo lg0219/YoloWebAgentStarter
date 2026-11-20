@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { modelChoicesFor } from "./helpers";
+import { applyTaskToForm, defaultForm, modelChoicesFor } from "./helpers";
+import type { TrainingTask } from "../types";
 
 describe("training model choices", () => {
   it("offers the supported YOLO26, YOLO11 and YOLOv8 families for detection", () => {
@@ -29,5 +30,34 @@ describe("training model choices", () => {
     for (const task of ["segment", "obb", "classify"] as const) {
       expect(modelChoicesFor(task).map((item) => item.value).some((value) => value.startsWith("rtdetr"))).toBe(false);
     }
+  });
+});
+
+describe("deterministic training switch", () => {
+  const task = {
+    id: "train-1",
+    name: "demo",
+    task_type: "detect",
+    device: "cpu",
+    model_name: "yolo11n.pt",
+    epochs: 3,
+    batch_size: 2,
+    img_size: 640,
+    workers: 0,
+    seed: 42,
+    val_ratio: 0.2,
+    patience: null,
+    optimizer: null,
+    lr0: null,
+    deterministic: false,
+  } as TrainingTask;
+
+  it("defaults to on, matching the Ultralytics default", () => {
+    expect(defaultForm("detect").deterministic).toBe(true);
+  });
+
+  it("keeps a retried task's stored value", () => {
+    expect(applyTaskToForm(task).deterministic).toBe(false);
+    expect(applyTaskToForm({ ...task, deterministic: true }).deterministic).toBe(true);
   });
 });

@@ -27,6 +27,7 @@ export interface TrainingFormState {
   patience: string;
   optimizer: string;
   lr0: string;
+  deterministic: boolean;
   device_type: DeviceType;
   compute_mode: ComputeMode;
   gpu_ids: string[];
@@ -70,6 +71,7 @@ export function defaultForm(taskType: TaskType): TrainingFormState {
     patience: String(preset.patience),
     optimizer: "",
     lr0: "",
+    deterministic: true,
     device_type: "auto",
     compute_mode: "single",
     gpu_ids: [],
@@ -163,6 +165,7 @@ export function applyTaskToForm(task: TrainingTask): TrainingFormState {
     patience: task.patience != null ? String(task.patience) : "",
     optimizer: task.optimizer ?? "",
     lr0: task.lr0 != null ? String(task.lr0) : "",
+    deterministic: task.deterministic !== false,
     device_type: isCudaList ? "cuda" : (device as DeviceType),
     compute_mode: gpuIds.length > 1 ? "multi" : "single",
     gpu_ids: gpuIds,

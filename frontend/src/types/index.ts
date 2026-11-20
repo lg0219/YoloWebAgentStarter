@@ -263,6 +263,7 @@ export interface TrainingTask {
   optimizer: string | null;
   lr0: number | null;
   patience: number | null;
+  deterministic: boolean;
   command_preview: string | null;
   export_path: string | null;
   data_yaml_path: string | null;

@@ -154,6 +154,7 @@ class TrainingService:
                     lr0=payload.lr0,
                     patience=payload.patience,
                     resume=resume_epoch,
+                    deterministic=payload.deterministic,
                 )
             )
             task = TrainingTask(

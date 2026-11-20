@@ -107,6 +107,7 @@ class YoloEngine(ModelEngine):
             lr0=spec.lr0,
             patience=spec.patience,
             resume=spec.resume,
+            deterministic=spec.deterministic,
         )
         return list(command.args)
 

@@ -203,6 +203,11 @@ class TrainingTask(Base, TimestampMixin):
     profile: Mapped[TrainingProfile | None] = relationship()
     model_versions: Mapped[list["ModelVersion"]] = relationship(back_populates="training_task")
 
+    @property
+    def deterministic(self) -> bool:
+        """确定性训练开关：保存在 config_json 里，不占用独立列。"""
+        return bool((self.config_json or {}).get("deterministic", True))
+
 
 class ModelVersion(Base, TimestampMixin):
     __tablename__ = "model_versions"

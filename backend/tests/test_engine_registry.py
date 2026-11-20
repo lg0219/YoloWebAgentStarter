@@ -81,6 +81,18 @@ def test_yolo_train_argv_starts_with_engine_key() -> None:
     assert any(item.startswith("data=") for item in argv)
 
 
+def test_yolo_train_argv_carries_deterministic_switch() -> None:
+    """确定性训练开关要显式落到命令行，方便在命令预览里核对。"""
+
+    on = get_engine("yolo").build_train_argv(_spec(deterministic=True))
+    off = get_engine("yolo").build_train_argv(_spec(deterministic=False))
+    absent = get_engine("yolo").build_train_argv(_spec())
+
+    assert "deterministic=True" in on
+    assert "deterministic=False" in off
+    assert not any(item.startswith("deterministic=") for item in absent)
+
+
 def test_rfdetr_train_argv_uses_runner_flags() -> None:
     argv = get_engine("rfdetr").build_train_argv(
         _spec(model="checkpoints/rfdetr-base.pth", device="cpu")

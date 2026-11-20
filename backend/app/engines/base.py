@@ -41,6 +41,8 @@ class TrainSpec:
     lr0: float | None = None
     patience: int | None = None
     resume: bool = False
+    # 确定性训练：True 时尽量保证同种子同结果；关掉可提速，也用于个别模型不吃这套算法的情况
+    deterministic: bool | None = None
 
 
 class ModelEngine(ABC):
@@ -53,7 +55,19 @@ class ModelEngine(ABC):
 
     # 该引擎实际生效的训练参数（前端据此显示/隐藏控件）
     supported_params: frozenset[str] = frozenset(
-        {"model", "epochs", "batch_size", "img_size", "workers", "seed", "patience", "optimizer", "lr0", "device"}
+        {
+            "model",
+            "epochs",
+            "batch_size",
+            "img_size",
+            "workers",
+            "seed",
+            "patience",
+            "optimizer",
+            "lr0",
+            "device",
+            "deterministic",
+        }
     )
     # 引擎固定、不可调的参数（前端以只读方式展示）
     fixed_params: dict[str, object] = {}
