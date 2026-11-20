@@ -106,15 +106,43 @@ def status(engine_key: str, name: str) -> dict:
     }
 
 
+def _download_rfdetr(name: str) -> Path:
+    """并行下载 RF-DETR 官方权重；框架自带的单连接在国内太慢。"""
+    from rfdetr.assets.model_weights import ModelWeights
+
+    from app.engines import rfdetr_download
+
+    path, filename = _rf_target(name)
+    url = ModelWeights.get_url(filename)
+    if not url:
+        raise ValidationError("weight_url_missing", f"找不到 {filename} 的下载地址")
+    state_key = f"rfdetr:{filename}"
+
+    def on_progress(done: int, total: int) -> None:
+        percent = round(done * 100.0 / total, 1) if total else 0.0
+        _set_state(state_key, downloaded=done, total=total, percent=percent)
+
+    result = rfdetr_download.download(url, path, on_progress=on_progress)
+    expected = ModelWeights.get_md5(filename)
+    if expected:
+        import hashlib
+
+        digest = hashlib.md5()
+        with open(result, "rb") as handle:
+            for block in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(block)
+        if digest.hexdigest() != expected:
+            result.unlink(missing_ok=True)
+            raise IOError("权重校验失败，文件可能不完整，请重试")
+    return result
+
+
 def _worker(engine_key: str, name: str) -> None:
     path, filename = _target(engine_key, name)
     key = f"{engine_key}:{filename}"
     try:
         if engine_key == "rfdetr":
-            from rfdetr.assets.model_weights import download_pretrain_weights
-
-            path.parent.mkdir(parents=True, exist_ok=True)
-            download_pretrain_weights(str(path))
+            _download_rfdetr(name)
         else:
             from app.engines.rtdetrv2_weights import VARIANT_DEPTH, ensure_backbone
 
