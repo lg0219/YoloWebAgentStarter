@@ -175,6 +175,19 @@ export function TrainingConfigPanel({
     }));
   };
 
+  // 档位型引擎的文案按引擎区分：RF-DETR 与 RT-DETR 的档位名和体积都不同
+  const variantCopy: Record<string, { help: string; hint: string }> = {
+    rtdetrv2: {
+      help: "按档位选择起点，每档都对应官方在 COCO 上训练好的完整模型：r18 约 77MB、r34 约 120MB、r50 约 165MB、r101 约 290MB。档位越大精度上限越高，但训练更慢、更占显存。训练从该权重接着练，不从零开始。",
+      hint: "该引擎按档位使用官方完整 COCO 预训练权重：点「下载权重」下载（r18 约 77MB），就绪后才能开始训练。请确认适用许可后再训练。",
+    },
+    rfdetr: {
+      help: "按档位选择起点，每档都对应 Roboflow 官方在 COCO 上训练好的完整模型：nano / small / base / medium / large，体积从约 350MB 到 1.5GB。档位越大精度上限越高，但训练更慢、更占显存。训练从该权重接着练，不从零开始。",
+      hint: "该引擎按档位使用官方完整 COCO 预训练权重：点「下载权重」下载（nano 约 350MB），就绪后才能开始训练。请确认适用许可后再训练。",
+    },
+  };
+  const currentVariantCopy = variantCopy[form.engine] ?? variantCopy.rfdetr;
+
   // 权重准备按钮：YOLO 走项目下载器，档位型引擎由框架按档位下载，界面共用同一套状态
   const weightActions = (
     <div className="training-weight-actions">
@@ -337,7 +350,7 @@ export function TrainingConfigPanel({
               <div className="training-ws-field training-ws-field-wide">
                 <span className="training-ws-field-label">
                   <label htmlFor={ids.model}>模型档位</label>
-                  <FieldHelp text="按档位选择起点，每档都对应官方在 COCO 上训练好的完整模型：r18 约 77MB、r34 约 120MB、r50 约 165MB、r101 约 290MB。档位越大精度上限越高，但训练更慢、更占显存。训练从该权重接着练，不从零开始。" />
+                  <FieldHelp text={currentVariantCopy.help} />
                 </span>
                 <select
                   id={ids.model}
@@ -443,7 +456,7 @@ export function TrainingConfigPanel({
             </p>
           ) : (
             <p className="tcc-model-hint training-ws-field-wide" role="note">
-              该引擎按档位使用官方完整 COCO 预训练权重：点「下载权重」下载（r18 约 77MB），就绪后才能开始训练。请确认适用许可后再训练。
+              {currentVariantCopy.hint}
             </p>
           )}
         </section>
