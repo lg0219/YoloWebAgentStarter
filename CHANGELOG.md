@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- RF-DETR 训练支持按档位选择（nano / small / base / medium / large），首次训练自动下载对应官方预训练权重；也可继续手填本地 `.pth`。
+
 ## lg0219-v0.2.0（2026-11-20）
 
 - 建立独立的 Starter 仓库与 SQLite baseline。

@@ -309,7 +309,7 @@ export function TrainingConfigPanel({
               <div className="training-ws-field training-ws-field-wide">
                 <span className="training-ws-field-label">
                   <label htmlFor={ids.model}>模型档位</label>
-                  <FieldHelp text="独立版 RT-DETR 按结构档位从零训练：r18 最轻、r101 最重。档位越大精度上限越高，但训练更慢、更吃显存。默认 r18。" />
+                  <FieldHelp text="按模型档位选择起点，相当于用官方在该档位训练好的权重接着练。档位越大精度上限越高，但训练更慢、更吃显存。首次使用会自动下载该档位的官方预训练权重。" />
                 </span>
                 <select
                   id={ids.model}
@@ -320,7 +320,7 @@ export function TrainingConfigPanel({
                     <option key={choice} value={choice}>{choice}</option>
                   ))}
                 </select>
-                <small className="training-weight-state">选档位即可训练；首次会自动下载主干预训练权重</small>
+                <small className="training-weight-state">选档位即可训练；首次会自动下载官方预训练权重</small>
               </div>
             ) : !usesAssets ? (
               <div className="training-ws-field training-ws-field-wide">

@@ -47,6 +47,8 @@ npm --prefix frontend install
 
 训练引擎下拉里还有一个「RT-DETR（独立版 v2）」，来自内嵌的 `lyuwenyu/RT-DETR` 源码。它按结构档位（r18 / r34 / r50 / r101）训练，数据集会由程序自动转成它要求的 COCO 格式，首次训练会自动下载主干预训练权重（约 45MB，走国内镜像，失败会换通道；权重缓存在 `weights/rtdetrv2/`）。训练产物带结构旁注，可以在应用内直接用于推理与测试；当前只支持检测任务，暂不支持导出 ONNX。首次使用需要安装额外依赖：`pip install -r backend/requirements-rtdetrv2.txt`。
 
+选择「RF-DETR」引擎时，模型档位可选 nano / small / base / medium / large，对应官方的 COCO 预训练权重（首次训练自动下载，缓存在 `~/.roboflow/models`，可用 `RF_HOME` 改路径）；也可以改填本地 `.pth` 路径从已有权重续训。RF-DETR 同样只支持检测，依赖 `pip install -r backend/requirements-detr.txt`。
+
 ## 配置与数据位置
 
 | 配置项 | 默认值 | 用途 |

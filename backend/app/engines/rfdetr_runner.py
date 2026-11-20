@@ -22,8 +22,30 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--weights", default="", help="本地权重路径；为空则使用预训练默认权重")
+    parser.add_argument("--variant", default="", help="模型档位：nano / small / base / medium / large")
     parser.add_argument("--resume", action="store_true")
     return parser.parse_args(argv)
+
+
+def _build_model(variant: str, weights: str):
+    """按档位实例化；档位缺省时退回 Base，本地权重优先。"""
+    import rfdetr
+
+    classes = {
+        "nano": "RFDETRNano",
+        "small": "RFDETRSmall",
+        "base": "RFDETRBase",
+        "medium": "RFDETRMedium",
+        "large": "RFDETRLarge",
+    }
+    key = (variant or "").strip().lower()
+    class_name = classes.get(key, "RFDETRBase")
+    model_cls = getattr(rfdetr, class_name)
+    path = (weights or "").strip()
+    if path and Path(path).expanduser().is_file():
+        return model_cls(pretrain_weights=str(Path(path).expanduser()))
+    # 不传 pretrain_weights：由框架按档位下载官方预训练权重
+    return model_cls()
 
 
 def _normalize_device(raw: str) -> str:
@@ -70,18 +92,15 @@ def main(argv: list[str] | None = None) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        from rfdetr import RFDETRBase
+        import rfdetr  # noqa: F401
     except ImportError:
         print(
             "[rfdetr_runner] 未安装 rfdetr 依赖，请执行：pip install -r backend/requirements-detr.txt",
             file=sys.stderr,
         )
         return 2
-    weights = (args.weights or "").strip()
-    if weights and Path(weights).expanduser().is_file():
-        model = RFDETRBase(pretrain_weights=str(Path(weights).expanduser()))
-    else:
-        model = RFDETRBase()
+    model = _build_model(args.variant, args.weights)
+    print(f"[rfdetr_runner] variant={(args.variant or 'base')}", flush=True)
 
     train_kwargs: dict[str, object] = {
         "dataset_dir": str(dataset_dir),
