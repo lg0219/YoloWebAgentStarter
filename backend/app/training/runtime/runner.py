@@ -114,30 +114,35 @@ class TrainingRunner:
             task = session.get(TrainingTask, task_id)
             return bool(task and task.stop_requested)
 
+    def _engine_key(self, task: TrainingTask) -> str:
+        """取该任务的引擎 key（命令首项就是引擎 key）。"""
+        args = [str(item) for item in (task.command_args_json or [])]
+        if args:
+            return args[0]
+        return str((task.config_json or {}).get("engine") or "")
+
     def _update_progress(self, task_id: str, line: str) -> None:
-        progress = self.metrics_parser.parse_progress_line(line)
-        if not progress:
-            # 独立版 RT-DETR 的日志是 `Epoch: [n] [i/J]`，里面的 i/J 是批次不是轮次，
-            # 直接按通用规则解析会把它当成轮次（实测会被 Test: [0/1] 覆盖成 0/1）。
-            # 这里只认「该轮跑完」的那一行，再换算成轮次进度。
-            match = re.match(r"^Epoch:\s*\[(\d+)\]\s+Total time", line)
-            if match:
-                with self.session_factory() as session:
-                    task = session.get(TrainingTask, task_id)
-                    if task is None or task.status != "running":
-                        return
-                    total = max(int(task.epochs or 1), 1)
-                    epoch = min(int(match.group(1)) + 1, total)
-                    task.progress_total_epochs = total
-                    task.progress_epoch = epoch
-                    task.progress_percent = round(epoch / total * 100, 2)
-                    session.commit()
+        # 独立版 RT-DETR 的日志里 `[i/J]` 是批次、`Test: [0/1]` 是验证进度，
+        # 按通用规则解析会被反复覆盖成 0/1，所以这类任务只认「该轮跑完」那一行。
+        rt_epoch_done = re.match(r"^Epoch:\s*\[(\d+)\]\s+Total time", line)
+        progress = None if rt_epoch_done else self.metrics_parser.parse_progress_line(line)
+        if rt_epoch_done is None and not progress:
             return
         with self.session_factory() as session:
             task = session.get(TrainingTask, task_id)
             if task is None or task.status != "running":
                 return
-            if "epoch" in progress:
+            if self._engine_key(task) == "rtdetrv2":
+                if rt_epoch_done is None:
+                    return
+                total = max(int(task.epochs or 1), 1)
+                epoch = min(int(rt_epoch_done.group(1)) + 1, total)
+                task.progress_total_epochs = total
+                task.progress_epoch = epoch
+                task.progress_percent = round(epoch / total * 100, 2)
+                session.commit()
+                return
+            if progress and "epoch" in progress:
                 total = int(progress.get("total_epochs", task.epochs))
                 epoch = min(int(progress.get("epoch", 0)), total)
                 task.progress_total_epochs = max(total, 1)
@@ -145,7 +150,7 @@ class TrainingRunner:
                 task.progress_percent = round(task.progress_epoch / task.progress_total_epochs * 100, 2)
             live_metrics = dict(task.metrics_json or {})
             for key in ("batch_time_seconds", "speed_it_per_sec"):
-                value = progress.get(key)
+                value = progress.get(key) if progress else None
                 if value is not None:
                     live_metrics[key] = value
             if live_metrics != (task.metrics_json or {}):
