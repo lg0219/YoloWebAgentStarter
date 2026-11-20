@@ -1,0 +1,5 @@
+# 独立版 RT-DETR（v2）训练所需的额外依赖
+# 内嵌源码见 backend/app/engines/vendor/rtdetrv2；torch / torchvision / pycocotools /
+# onnx / onnxruntime 已在主依赖中，这里只补两个它必需但主依赖没有的包。
+tensorboard>=2.16
+faster-coco-eval>=1.6.6

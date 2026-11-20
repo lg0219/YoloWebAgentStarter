@@ -71,6 +71,10 @@ class ModelEngine(ABC):
     )
     # 引擎固定、不可调的参数（前端以只读方式展示）
     fixed_params: dict[str, object] = {}
+    # 该引擎是否允许「基础权重」留空或填档位名（例如独立版 RT-DETR 从零训练）
+    allows_blank_model: bool = False
+    # 可选的模型档位；为空表示按权重文件走
+    model_choices: tuple[str, ...] = ()
 
     @abstractmethod
     def command_prefix(self) -> list[str]:

@@ -123,3 +123,71 @@ def test_weight_suffix_judgement() -> None:
     rfdetr = get_engine("rfdetr")
     assert rfdetr.accepts_weight("rfdetr-base.pth")
     assert not rfdetr.accepts_weight("yolo11n.pt")
+
+
+def test_rtdetrv2_sidecar_routes_pth_to_standalone_engine(tmp_path: Path) -> None:
+    """带结构旁注的 .pt/.pth 要判给独立版，而不是 RF-DETR 或 Ultralytics。"""
+
+    plain = tmp_path / "plain.pth"
+    plain.write_bytes(b"x")
+    assert engine_for_weight(plain).info.key == "rfdetr"
+
+    marked = tmp_path / "best.pt"
+    marked.write_bytes(b"x")
+    (tmp_path / "best.json").write_text(
+        json.dumps({"engine": "rtdetrv2", "variant": "r18", "resolution": 320, "num_classes": 1, "names": ["a"]}),
+        encoding="utf-8",
+    )
+    assert engine_for_weight(marked).info.key == "rtdetrv2"
+
+
+def test_rtdetrv2_is_detect_only_and_allows_blank_model() -> None:
+    engine = get_engine("rtdetrv2")
+    assert engine.info.task_types == (TaskType.DETECT,)
+    assert engine.allows_blank_model is True
+    assert "r18" in engine.model_choices
+    with pytest.raises(ValidationError):
+        engine.build_train_argv(_spec(task_type=TaskType.SEGMENT))
+
+
+def test_rtdetrv2_train_argv_maps_variant_and_weights(tmp_path: Path) -> None:
+    engine = get_engine("rtdetrv2")
+
+    blank = engine.build_train_argv(_spec(model=""))
+    assert blank[0] == "rtdetrv2"
+    assert "--dataset-dir" in blank and "--output-dir" in blank
+    assert "--variant" not in blank
+
+    variant = engine.build_train_argv(_spec(model="r50"))
+    assert variant[variant.index("--variant") + 1] == "r50"
+
+    weight = tmp_path / "model.pth"
+    weight.write_bytes(b"weights")
+    with_weights = engine.build_train_argv(_spec(model=str(weight)))
+    assert "--weights" in with_weights
+    assert "--variant" not in with_weights
+
+
+def test_rtdetrv2_export_converts_to_zero_based_ascii_coco(tmp_path: Path) -> None:
+    from PIL import Image
+
+    from app.engines.rtdetrv2_data import convert_export
+
+    export = tmp_path / "export"
+    for split in ("train", "val"):
+        (export / "images" / split).mkdir(parents=True)
+        (export / "labels" / split).mkdir(parents=True)
+    Image.new("RGB", (100, 50), "#123456").save(export / "images" / "train" / "a.jpg")
+    (export / "labels" / "train" / "a.txt").write_text("0 0.5 0.5 0.2 0.4\n", encoding="utf-8")
+    Image.new("RGB", (100, 50), "#654321").save(export / "images" / "val" / "b.jpg")
+    (export / "data.yaml").write_text("names:\n- 不干净\n", encoding="utf-8")
+
+    result = convert_export(export, tmp_path / "coco")
+
+    assert set(result["splits"]) == {"train", "val"}
+    raw = Path(result["splits"]["train"]["path"]).read_bytes()
+    raw.decode("ascii")  # 必须是纯 ASCII，否则独立版按 GBK 读取会崩
+    payload = json.loads(raw)
+    assert payload["categories"] == [{"id": 0, "name": "不干净"}]
+    assert payload["annotations"][0]["category_id"] == 0
+    assert payload["annotations"][0]["bbox"] == [40.0, 15.0, 20.0, 20.0]

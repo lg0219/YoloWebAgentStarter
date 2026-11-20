@@ -25,6 +25,16 @@ from app.training.observability.telemetry import TrainingTelemetryService
 from app.training.runtime.process_registry import process_registry
 from app.training.runtime.queue import TrainingQueue
 from app.training.runtime.device_service import DeviceService
+
+
+def _looks_like_weight_path(model: str | None) -> bool:
+    """判断「基础权重」字段填的是文件路径，还是引擎自定的档位名。"""
+    text = (model or "").strip()
+    if not text:
+        return False
+    candidate = Path(text).expanduser()
+    return candidate.is_absolute() or candidate.parent != Path(".") or candidate.suffix.lower() in {".pt", ".pth", ".yaml", ".onnx"}
+
 from app.training.schemas import (
     TrainingLogResponse,
     TrainingProfileCreate,
@@ -103,7 +113,13 @@ class TrainingService:
         if task_type.value != dataset.task_type:
             raise ValidationError("task_type_mismatch", "Training task type must match the dataset task type.")
         validate_model_family(task_type, payload.model)
-        model_reference = resolve_model_reference(payload.model, self.storage)
+        # 引擎可能需要模型留空或使用档位名（如独立版 RT-DETR），先取引擎再决定如何解析权重
+        engine_key = (payload.engine or "").strip() or configured_engine_key(self.storage.data_dir)
+        engine = get_engine(engine_key)
+        if getattr(engine, "allows_blank_model", False) and not _looks_like_weight_path(payload.model):
+            model_reference = (payload.model or "").strip()
+        else:
+            model_reference = resolve_model_reference(payload.model, self.storage)
         self._validate_dataset_ready(session, dataset)
 
         if task_id:
@@ -131,7 +147,6 @@ class TrainingService:
                 )
             }
             engine_key = (payload.engine or "").strip() or configured_engine_key(self.storage.data_dir)
-            engine = get_engine(engine_key)
             if not engine.supports_task(task_type):
                 raise ValidationError(
                     "engine_task_unsupported",

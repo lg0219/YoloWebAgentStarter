@@ -23,10 +23,12 @@ def _bootstrap() -> None:
         return
     # 延迟导入，避免与领域模块形成循环依赖
     from app.engines.rfdetr import RfDetrEngine
+    from app.engines.rtdetrv2 import RtdetrV2Engine
     from app.engines.yolo import YoloEngine
 
     register_engine(YoloEngine())
     register_engine(RfDetrEngine())
+    register_engine(RtdetrV2Engine())
 
 
 def get_engine(key: str | None = None) -> ModelEngine:
@@ -46,6 +48,12 @@ def engine_for_weight(path: str | Path, fallback: str | None = None) -> ModelEng
     """按权重文件后缀推断引擎；无法判断时退回指定引擎或默认引擎。"""
     suffix = Path(str(path)).suffix.lower()
     _bootstrap()
+    # .pt / .pth 都可能是独立版 RT-DETR 的产物；带训练旁注文件的优先判给它
+    if suffix in {".pt", ".pth"}:
+        from app.engines.rtdetrv2 import read_sidecar
+
+        if read_sidecar(Path(str(path))) is not None:
+            return get_engine("rtdetrv2")
     for engine in _ENGINES.values():
         if suffix in engine.info.weight_suffixes:
             return engine
@@ -70,6 +78,8 @@ def engine_capabilities() -> list[dict]:
                 "weight_suffixes": list(engine.info.weight_suffixes),
                 "supported_params": sorted(engine.supported_params),
                 "fixed_params": dict(engine.fixed_params),
+                "allows_blank_model": bool(getattr(engine, "allows_blank_model", False)),
+                "model_choices": list(getattr(engine, "model_choices", ())),
             }
         )
     return payload
