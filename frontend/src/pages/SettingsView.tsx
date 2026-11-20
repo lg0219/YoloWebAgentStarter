@@ -4,13 +4,16 @@ import type { AppLocale } from "../locale";
 import { saveLocale } from "../locale";
 import type {
   AnnotationSettings,
+  DeploymentInfo,
   LLMAuthScheme,
   LLMSettings,
+  PipelineSettings,
+  RuntimeSettings,
   SamSettings,
   TrainingDevice,
 } from "../types";
 
-export type SettingsTab = "llm" | "sam" | "annotation" | "language";
+export type SettingsTab = "llm" | "sam" | "annotation" | "pipeline" | "runtime" | "language";
 
 type LlmFormState = LLMSettings & { api_key: string };
 
@@ -81,6 +84,46 @@ const copy = {
     saveAnnotation: "保存标注设置",
     savedAnnotation: "标注设置已保存",
     annotationFooter: "改变线宽后，新画的框线立即使用新值；已有框线不变。",
+    pipelineNav: "智能分析",
+    pipelineNavDescription: "云端解释（可选）",
+    pipelineTitle: "智能分析 · 云端解释",
+    pipelineSubtitle: "可选。启用后「解释」这一步交给云端多模态模型；检测与分割仍在本地运行。",
+    pipelineCloudLabel: "启用云端解释",
+    pipelineCloudHint: "不勾选则使用本地模型，行为不变。",
+    pipelineEnabledLabel: "启用智能分析页",
+    pipelineEnabledHint: "需要先部署 vlm-bridge 推理服务。未启用时左侧不显示入口，也不产生请求。",
+    pipelineApiBase: "接口地址",
+    pipelineApiBaseHint: "例如 https://dashscope.aliyuncs.com/compatible-mode/v1",
+    pipelineModel: "模型名称",
+    pipelineModelHint: "例如 qwen-vl-max",
+    pipelineApiKey: "密钥",
+    pipelineApiKeyHint: "留空表示沿用已保存的密钥。",
+    pipelineTimeout: "超时（秒）",
+    pipelineMaxTokens: "最大输出长度",
+    savePipeline: "保存智能分析设置",
+    savedPipeline: "智能分析设置已保存",
+    runtimeNav: "运行参数",
+    runtimeNavDescription: "上传限制与部署信息",
+    runtimeTitle: "运行参数",
+    runtimeSubtitle: "保存后立即生效，无需重启。",
+    yoloExecutable: "YOLO 可执行文件",
+    yoloExecutableHint: "留空则自动使用仓库内的 .venv。",
+    maxUpload: "单次上传上限（MB）",
+    maxVideoUpload: "视频上传上限（MB）",
+    maxVideoDuration: "视频时长上限（秒）",
+    modelSource: "权重下载源",
+    modelSourceHint: "训练首次使用某个预训练权重时会从 GitHub 下载，国内常卡住。镜像只是加速通道，文件仍来自官方仓库；镜像失效时切回官方或改自定义。",
+    modelSourceCustom: "自定义前缀",
+    modelSourceCustomHint: "填完整前缀并保留结尾斜杠，例如 https://你的镜像/ ；程序会拼成「前缀 + https://github.com/...」。",
+    sourceOfficial: "官方 GitHub",
+    sourceGhfast: "镜像 ghfast.top（快）",
+    sourceGhProxy: "镜像 gh-proxy.com（快）",
+    sourceGhproxyNet: "镜像 ghproxy.net（较慢）",
+    sourceCustom: "自定义",
+    saveRuntime: "保存运行参数",
+    savedRuntime: "运行参数已保存",
+    deploymentTitle: "部署信息",
+    deploymentSubtitle: "以下为启动参数，只读；修改需改环境变量并重启服务。",
     generalTitle: "通用设置",
     generalSubtitle: "界面显示偏好，所有设置只保存在本机浏览器中。",
     displayLanguage: "显示语言",
@@ -171,6 +214,46 @@ const copy = {
     saveAnnotation: "Save annotation settings",
     savedAnnotation: "Annotation settings saved",
     annotationFooter: "New boxes use the new width immediately; existing boxes are unchanged.",
+    pipelineNav: "Smart analysis",
+    pipelineNavDescription: "Optional cloud reasoning",
+    pipelineTitle: "Smart analysis · cloud reasoning",
+    pipelineSubtitle: "Optional. When enabled, the reasoning step runs on a cloud multimodal model; detection and segmentation stay local.",
+    pipelineCloudLabel: "Enable cloud reasoning",
+    pipelineCloudHint: "Leave off to keep using the local model; nothing changes.",
+    pipelineEnabledLabel: "Enable smart analysis page",
+    pipelineEnabledHint: "Requires the vlm-bridge service. When off, the sidebar entry is hidden and no requests are made.",
+    pipelineApiBase: "API base URL",
+    pipelineApiBaseHint: "For example https://dashscope.aliyuncs.com/compatible-mode/v1",
+    pipelineModel: "Model name",
+    pipelineModelHint: "For example qwen-vl-max",
+    pipelineApiKey: "API key",
+    pipelineApiKeyHint: "Leave empty to keep the saved key.",
+    pipelineTimeout: "Timeout (seconds)",
+    pipelineMaxTokens: "Max output tokens",
+    savePipeline: "Save smart analysis settings",
+    savedPipeline: "Smart analysis settings saved",
+    runtimeNav: "Runtime",
+    runtimeNavDescription: "Upload limits and deployment info",
+    runtimeTitle: "Runtime settings",
+    runtimeSubtitle: "Applied immediately after saving; no restart needed.",
+    yoloExecutable: "YOLO executable",
+    yoloExecutableHint: "Leave empty to use the repository .venv automatically.",
+    maxUpload: "Single upload limit (MB)",
+    maxVideoUpload: "Video upload limit (MB)",
+    maxVideoDuration: "Video duration limit (seconds)",
+    modelSource: "Weight download source",
+    modelSourceHint: "The first training run downloads pretrained weights from GitHub, which is unreliable in some networks. Mirrors are only accelerators; files still come from the official repository. Switch back to official if a mirror fails.",
+    modelSourceCustom: "Custom prefix",
+    modelSourceCustomHint: "Full prefix with trailing slash, e.g. https://your-mirror/ ; it is joined as prefix + https://github.com/...",
+    sourceOfficial: "Official GitHub",
+    sourceGhfast: "Mirror ghfast.top (fast)",
+    sourceGhProxy: "Mirror gh-proxy.com (fast)",
+    sourceGhproxyNet: "Mirror ghproxy.net (slower)",
+    sourceCustom: "Custom",
+    saveRuntime: "Save runtime settings",
+    savedRuntime: "Runtime settings saved",
+    deploymentTitle: "Deployment info",
+    deploymentSubtitle: "Read-only startup parameters. Change the environment variables and restart to modify them.",
     generalTitle: "General settings",
     generalSubtitle: "Workspace display preferences. Preferences are stored in this browser only.",
     displayLanguage: "Display language",
@@ -295,6 +378,20 @@ export function SettingsView({
             onClick={() => onTabChange("annotation")}
           />
           <SettingsNavigationItem
+            active={tab === "pipeline"}
+            icon={<LlmIcon />}
+            title={text.pipelineNav}
+            description={text.pipelineNavDescription}
+            onClick={() => onTabChange("pipeline")}
+          />
+          <SettingsNavigationItem
+            active={tab === "runtime"}
+            icon={<SamIcon />}
+            title={text.runtimeNav}
+            description={text.runtimeNavDescription}
+            onClick={() => onTabChange("runtime")}
+          />
+          <SettingsNavigationItem
             active={tab === "language"}
             icon={<LanguageIcon />}
             title={text.generalNav}
@@ -309,6 +406,10 @@ export function SettingsView({
             <SamSettingsPanel locale={locale} text={text} onSamSettingsChange={onSamSettingsChange} />
           ) : tab === "annotation" ? (
             <AnnotationSettingsPanel locale={locale} text={text} />
+          ) : tab === "pipeline" ? (
+            <PipelineSettingsPanel locale={locale} text={text} />
+          ) : tab === "runtime" ? (
+            <RuntimeSettingsPanel locale={locale} text={text} />
           ) : (
             <GeneralSettingsPanel locale={locale} text={text} onLocaleChange={onLocaleChange} showBrandBar={showBrandBar} onBrandBarChange={onBrandBarChange} />
           )}
@@ -866,5 +967,291 @@ function LanguageIcon() {
       <circle cx="12" cy="12" r="8" />
       <path d="M4 12h16M12 4c2.2 2.1 3.3 4.8 3.3 8S14.2 17.9 12 20c-2.2-2.1-3.3-4.8-3.3-8S9.8 6.1 12 4" />
     </svg>
+  );
+}
+
+// （lg0219）智能分析：云端解释（可选，只作用于「解释」阶段；不启用时行为不变）
+function PipelineSettingsPanel({ text }: { locale: AppLocale; text: SettingsText }) {
+  const [settings, setSettings] = useState<PipelineSettings>();
+  const [apiKey, setApiKey] = useState("");
+  const [busy, setBusy] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api.getPipelineSettings()
+      .then(setSettings)
+      .catch((reason) => setError(reason instanceof Error ? reason.message : text.error))
+      .finally(() => setBusy(false));
+  }, []);
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!settings) return;
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      const next = await api.updatePipelineSettings({
+        enabled: settings.enabled,
+        cloud_enabled: settings.cloud_enabled,
+        api_base: settings.api_base,
+        model: settings.model,
+        api_key: apiKey.trim() || undefined,
+        timeout_seconds: settings.timeout_seconds,
+        max_tokens: settings.max_tokens,
+      });
+      setSettings(next);
+      setApiKey("");
+      setMessage(text.savedPipeline);
+      // 让外壳立即刷新「智能分析」入口的显示状态
+      window.dispatchEvent(new Event("pipeline-settings-changed"));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : text.error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (busy) return <section className="panel settings-card"><p className="muted settings-loading">{text.loading}</p></section>;
+  if (!settings) return <section className="panel settings-card"><div className="validation invalid">{error || text.error}</div></section>;
+
+  return (
+    <form className="panel settings-card" onSubmit={(event) => void save(event)}>
+      <header className="settings-card-head">
+        <div className="settings-card-icon"><LlmIcon /></div>
+        <div>
+          <h2>{text.pipelineTitle}</h2>
+          <p>{text.pipelineSubtitle}</p>
+        </div>
+        <span className={`settings-status ${settings.enabled ? "ready" : "disabled"}`}>
+          {settings.enabled ? "ON" : "OFF"}
+        </span>
+      </header>
+      {error ? <div className="validation invalid"><span>{error}</span></div> : null}
+      {message && !error ? <div className="validation valid"><span>{message}</span></div> : null}
+
+      <label className="settings-toggle">
+        <input
+          type="checkbox"
+          checked={settings.enabled}
+          onChange={(event) => setSettings({ ...settings, enabled: event.target.checked })}
+        />
+        <span>
+          <strong>{text.pipelineEnabledLabel}</strong>
+          <small>{text.pipelineEnabledHint}</small>
+        </span>
+      </label>
+
+      <label className="settings-toggle">
+        <input
+          type="checkbox"
+          checked={settings.cloud_enabled}
+          onChange={(event) => setSettings({ ...settings, cloud_enabled: event.target.checked })}
+        />
+        <span>
+          <strong>{text.pipelineCloudLabel}</strong>
+          <small>{text.pipelineCloudHint}</small>
+        </span>
+      </label>
+
+      <div className="settings-form-grid">
+        <label>
+          <span>{text.pipelineApiBase}</span>
+          <input
+            value={settings.api_base}
+            placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1"
+            onChange={(event) => setSettings({ ...settings, api_base: event.target.value })}
+          />
+          <small>{text.pipelineApiBaseHint}</small>
+        </label>
+        <label>
+          <span>{text.pipelineModel}</span>
+          <input
+            value={settings.model}
+            placeholder="qwen-vl-max"
+            onChange={(event) => setSettings({ ...settings, model: event.target.value })}
+          />
+          <small>{text.pipelineModelHint}</small>
+        </label>
+        <label>
+          <span>{text.pipelineApiKey}</span>
+          <input
+            type="password"
+            value={apiKey}
+            placeholder={settings.api_key_configured ? "••••••••" : ""}
+            onChange={(event) => setApiKey(event.target.value)}
+          />
+          <small>{text.pipelineApiKeyHint}</small>
+        </label>
+        <label>
+          <span>{text.pipelineTimeout}</span>
+          <input
+            type="number"
+            min={5}
+            max={600}
+            value={settings.timeout_seconds}
+            onChange={(event) => setSettings({ ...settings, timeout_seconds: Number(event.target.value) || 60 })}
+          />
+        </label>
+        <label>
+          <span>{text.pipelineMaxTokens}</span>
+          <input
+            type="number"
+            min={32}
+            max={4096}
+            value={settings.max_tokens}
+            onChange={(event) => setSettings({ ...settings, max_tokens: Number(event.target.value) || 256 })}
+          />
+        </label>
+      </div>
+      <button type="submit" className="button primary" disabled={saving}>
+        {saving ? "…" : text.savePipeline}
+      </button>
+    </form>
+  );
+}
+
+// （lg0219）运行参数：保存后即时生效；部署信息只读展示
+function RuntimeSettingsPanel({ text }: { locale: AppLocale; text: SettingsText }) {
+  const [settings, setSettings] = useState<RuntimeSettings>();
+  const [deployment, setDeployment] = useState<DeploymentInfo>();
+  const [busy, setBusy] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    Promise.all([api.getRuntimeSettings(), api.getDeploymentInfo()])
+      .then(([runtime, info]) => {
+        setSettings(runtime);
+        setDeployment(info);
+      })
+      .catch((reason) => setError(reason instanceof Error ? reason.message : text.error))
+      .finally(() => setBusy(false));
+  }, []);
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!settings) return;
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      setSettings(await api.updateRuntimeSettings(settings));
+      setMessage(text.savedRuntime);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : text.error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (busy) return <section className="panel settings-card"><p className="muted settings-loading">{text.loading}</p></section>;
+  if (!settings) return <section className="panel settings-card"><div className="validation invalid">{error || text.error}</div></section>;
+
+  return (
+    <>
+      <form className="panel settings-card" onSubmit={(event) => void save(event)}>
+        <header className="settings-card-head">
+          <div className="settings-card-icon"><SamIcon /></div>
+          <div>
+            <h2>{text.runtimeTitle}</h2>
+            <p>{text.runtimeSubtitle}</p>
+          </div>
+        </header>
+        {error ? <div className="validation invalid"><span>{error}</span></div> : null}
+        {message && !error ? <div className="validation valid"><span>{message}</span></div> : null}
+        <div className="settings-form-grid">
+          <label>
+            <span>{text.yoloExecutable}</span>
+            <input
+              value={settings.yolo_executable}
+              onChange={(event) => setSettings({ ...settings, yolo_executable: event.target.value })}
+            />
+            <small>{text.yoloExecutableHint}</small>
+          </label>
+          <label>
+            <span>{text.maxUpload}</span>
+            <input
+              type="number"
+              min={1}
+              max={4096}
+              value={settings.max_upload_mb}
+              onChange={(event) => setSettings({ ...settings, max_upload_mb: Number(event.target.value) || 50 })}
+            />
+          </label>
+          <label>
+            <span>{text.maxVideoUpload}</span>
+            <input
+              type="number"
+              min={1}
+              max={102400}
+              value={settings.max_video_upload_mb}
+              onChange={(event) => setSettings({ ...settings, max_video_upload_mb: Number(event.target.value) || 2048 })}
+            />
+          </label>
+          <label>
+            <span>{text.maxVideoDuration}</span>
+            <input
+              type="number"
+              min={10}
+              max={86400}
+              value={settings.max_video_duration_seconds}
+              onChange={(event) =>
+                setSettings({ ...settings, max_video_duration_seconds: Number(event.target.value) || 14400 })
+              }
+            />
+          </label>
+          <label>
+            <span>{text.modelSource}</span>
+            <select
+              value={settings.model_source}
+              onChange={(event) => setSettings({ ...settings, model_source: event.target.value })}
+            >
+              <option value="official">{text.sourceOfficial}</option>
+              <option value="ghfast">{text.sourceGhfast}</option>
+              <option value="gh-proxy">{text.sourceGhProxy}</option>
+              <option value="ghproxy-net">{text.sourceGhproxyNet}</option>
+              <option value="custom">{text.sourceCustom}</option>
+            </select>
+            <small>{text.modelSourceHint}</small>
+          </label>
+          {settings.model_source === "custom" ? (
+            <label>
+              <span>{text.modelSourceCustom}</span>
+              <input
+                value={settings.model_source_custom}
+                placeholder="https://your-mirror/"
+                onChange={(event) => setSettings({ ...settings, model_source_custom: event.target.value })}
+              />
+              <small>{text.modelSourceCustomHint}</small>
+            </label>
+          ) : null}
+        </div>
+        <button type="submit" className="button primary" disabled={saving}>
+          {saving ? "…" : text.saveRuntime}
+        </button>
+      </form>
+
+      <section className="panel settings-card">
+        <header className="settings-card-head">
+          <div>
+            <h2>{text.deploymentTitle}</h2>
+            <p>{text.deploymentSubtitle}</p>
+          </div>
+        </header>
+        <div className="settings-form-grid">
+          {(deployment?.items ?? []).map((item) => (
+            <label key={item.key}>
+              <span>{item.label}</span>
+              <input value={item.value} readOnly />
+              <small>{item.note}</small>
+            </label>
+          ))}
+        </div>
+      </section>
+    </>
   );
 }

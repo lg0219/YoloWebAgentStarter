@@ -5,6 +5,8 @@ SQLAlchemy==2.0.36
 alembic==1.14.0
 python-multipart==0.0.19
 Pillow==11.0.0
+# （lg0219）DICOM 导入：工业 DR 设备输出 16bit 单帧 .dcm，导入时转 8bit PNG。
+pydicom==3.0.2
 opencv-python-headless==4.11.0.86
 PyYAML==6.0.2
 # Keep the NumPy ceiling platform-independent for the Starter's validation and

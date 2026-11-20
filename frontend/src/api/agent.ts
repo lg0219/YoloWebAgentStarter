@@ -14,10 +14,10 @@ export interface AgentApprovalDecision {
   run: AgentRun;
 }
 
-const API_BASE = (import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000").replace(/\/$/, "");
+import { apiUrl } from "./runtimeConfig";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, init);
+  const response = await fetch(apiUrl(path), init);
   if (!response.ok) {
     let message = `Request failed (${response.status})`;
     try {

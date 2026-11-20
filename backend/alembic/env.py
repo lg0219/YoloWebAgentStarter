@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -11,6 +12,12 @@ from app.core import models  # noqa: F401
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# 命令行执行迁移时优先使用环境变量，避免 alembic.ini 中的相对路径随工作目录漂移。
+# 应用内启动时由 app.core.migrations 显式设置绝对路径，不受此处影响。
+_database_url = os.getenv("YWA_DATABASE_URL", "").strip()
+if _database_url:
+    config.set_main_option("sqlalchemy.url", _database_url.replace("%", "%%"))
 
 target_metadata = Base.metadata
 

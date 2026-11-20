@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { AppLocale } from "../locale";
 import { localeText } from "../locale";
 
-export type StarterSection = "workspace" | "training" | "models" | "agent" | "logs" | "settings";
+export type StarterSection = "workspace" | "training" | "models" | "pipeline" | "agent" | "logs" | "settings";
 
 interface Props {
   active: StarterSection;
@@ -11,6 +11,8 @@ interface Props {
   locale?: AppLocale;
   // 2026-11-06 新增：顶部品牌区显示开关，false 时整行不渲染（见「通用设置」）
   showBrandBar?: boolean;
+  // 2026-11-19 新增：智能分析入口开关，默认关闭（未部署 vlm-bridge 时不显示）
+  showPipeline?: boolean;
   children: ReactNode;
 }
 
@@ -18,6 +20,7 @@ const navigation: Array<{ id: StarterSection; label: string; icon: ReactNode }> 
   { id: "workspace", label: "数据集", icon: <DatasetIcon /> },
   { id: "training", label: "训练", icon: <TrainingIcon /> },
   { id: "models", label: "模型", icon: <ModelIcon /> },
+  { id: "pipeline", label: "智能分析", icon: <PipelineIcon /> },
   { id: "agent", label: "智能体", icon: <AgentIcon /> },
   { id: "logs", label: "日志", icon: <LogsIcon /> },
   { id: "settings", label: "设置", icon: <SettingsIcon /> },
@@ -27,18 +30,24 @@ const navigation: Array<{ id: StarterSection; label: string; icon: ReactNode }> 
  * 社区版工作台外壳。视觉和信息层级参考 YoloWebAgent。
  * Agent MVP 为本地只读助手 + 人工确认提交；不含 Workflow / 无人值守入口。
  */
-export function StarterShell({ active, datasetName, onNavigate, locale = "zh", showBrandBar = true, children }: Props) {
+export function StarterShell({ active, datasetName, onNavigate, locale = "zh", showBrandBar = true, showPipeline = false, children }: Props) {
   const text = localeText[locale];
   const labels: Record<StarterSection, string> = {
     workspace: text.datasets,
     training: text.training,
     models: text.models,
+    pipeline: "智能分析",
     agent: text.agent,
     settings: text.settingsGroup,
     logs: text.logs,
   };
+  // 智能分析未启用时不显示入口；分组仍按原样（前五项为主分组，末尾为设置分组）
+  const visibleNavigation = navigation.filter((item) => showPipeline || item.id !== "pipeline");
+  const footerIds = new Set<StarterSection>(["logs", "settings"]);
+  const primaryNavigation = visibleNavigation.filter((item) => !footerIds.has(item.id));
+  const footerNavigation = visibleNavigation.filter((item) => footerIds.has(item.id));
   return (
-    <div className="starter-shell">
+    <div className={`starter-shell${showBrandBar ? "" : " starter-shell-no-brandbar"}`}>
       {showBrandBar && (
         <header className="starter-topbar">
           <button className="starter-topbar-brand" onClick={() => onNavigate("workspace")} aria-label={text.backToDatasets}>
@@ -59,9 +68,9 @@ export function StarterShell({ active, datasetName, onNavigate, locale = "zh", s
           </div>
           <nav className="starter-menu" aria-label={text.mainNav}>
             <span className="starter-menu-group-label">{text.workspaceGroup}</span>
-            {navigation.slice(0, 5).map((item) => <NavigationButton key={item.id} item={item} active={active} labels={labels} onNavigate={onNavigate} />)}
+            {primaryNavigation.map((item) => <NavigationButton key={item.id} item={item} active={active} labels={labels} onNavigate={onNavigate} />)}
             <span className="starter-menu-group-label">{text.settingsGroup}</span>
-            {navigation.slice(5).map((item) => <NavigationButton key={item.id} item={item} active={active} labels={labels} onNavigate={onNavigate} />)}
+            {footerNavigation.map((item) => <NavigationButton key={item.id} item={item} active={active} labels={labels} onNavigate={onNavigate} />)}
           </nav>
           <div className="starter-sidebar-note">
             <strong>{text.sidebarNoteTitle}</strong>
@@ -90,6 +99,8 @@ function NavigationButton({ item, active, labels, onNavigate }: { item: (typeof 
     {item.icon}<span>{labels[item.id]}</span>
   </button>;
 }
+
+function PipelineIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="7" height="7" rx="1.5" /><rect x="13.5" y="13" width="7" height="7" rx="1.5" /><path d="M10.5 7.5h3a2 2 0 0 1 2 2v3.5" /><path d="M13.5 16.5h-3a2 2 0 0 1-2-2V11" /></svg>; }
 
 function DatasetIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5v-11Z" /><path d="m7.5 15 2.5-3 2 2.2 1.7-1.8 2.8 3.1" /><circle cx="9" cy="9" r="1.2" /></svg>; }
 function TrainingIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18V9m5 9V5m5 13v-7m4 7V8" /><path d="M3.5 20.5h17" /></svg>; }

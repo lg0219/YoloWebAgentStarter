@@ -26,6 +26,13 @@ def get_settings(request: Request) -> Settings:
     return request.app.state.settings
 
 
+def get_effective_settings(request: Request) -> Settings:
+    """启动配置叠加界面可配的运行参数（上传大小、视频限制等）。"""
+    from app.settings.service import SettingsService
+
+    return SettingsService(request.app.state.settings).effective_settings()
+
+
 def get_storage(request: Request):
     return request.app.state.storage
 
@@ -43,10 +50,14 @@ def get_auto_annotation_service(request: Request) -> AutoAnnotationService:
 
 
 def get_video_import_service(request: Request) -> VideoImportService:
+    from app.settings.service import SettingsService
+
+    # 使用叠加了界面运行参数后的配置，使上传/时长限制即时生效
+    effective = SettingsService(request.app.state.settings).effective_settings()
     return VideoImportService(
         request.app.state.database.session_factory,
         request.app.state.storage,
-        request.app.state.settings,
+        effective,
         video_import_queue,
     )
 

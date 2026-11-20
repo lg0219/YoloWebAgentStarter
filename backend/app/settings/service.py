@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+from dataclasses import replace
 from typing import Any
 
 import httpx
@@ -16,11 +18,17 @@ from app.core.errors import ValidationError
 from app.settings.schemas import (
     AnnotationSettingsResponse,
     AnnotationSettingsUpdate,
+    DeploymentInfoResponse,
+    DeploymentItem,
     LLMConnectionTestRequest,
     LLMConnectionTestResult,
     LLMSettingsInternal,
     LLMSettingsOut,
     LLMSettingsUpdate,
+    PipelineSettingsOut,
+    PipelineSettingsUpdate,
+    RuntimeSettingsOut,
+    RuntimeSettingsUpdate,
     SamSettingsResponse,
     SamSettingsUpdate,
 )
@@ -222,6 +230,139 @@ class SettingsService:
             code="http_error",
             http_status=response.status_code,
         )
+
+    # --- （lg0219）智能分析：云端解释（可选） ---
+
+    def get_pipeline_settings(self) -> PipelineSettingsOut:
+        section = self._read().get("pipeline", {})
+        return PipelineSettingsOut(
+            enabled=bool(section.get("enabled", False)),
+            cloud_enabled=bool(section.get("cloud_enabled", False)),
+            api_base=str(section.get("api_base", "")).strip(),
+            model=str(section.get("model", "")).strip(),
+            api_key_configured=bool(str(section.get("api_key", "")).strip()),
+            timeout_seconds=int(section.get("timeout_seconds", 60)),
+            max_tokens=int(section.get("max_tokens", 256)),
+        )
+
+    def update_pipeline_settings(self, payload: PipelineSettingsUpdate) -> PipelineSettingsOut:
+        data = self._read()
+        section = dict(data.get("pipeline") or {})
+        section["enabled"] = payload.enabled
+        section["cloud_enabled"] = payload.cloud_enabled
+        section["api_base"] = payload.api_base.strip()
+        section["model"] = payload.model.strip()
+        section["timeout_seconds"] = payload.timeout_seconds
+        section["max_tokens"] = payload.max_tokens
+        # 留空表示沿用已保存的密钥；非空则覆盖
+        if payload.api_key is not None and payload.api_key.strip():
+            section["api_key"] = payload.api_key.strip()
+        if not payload.cloud_enabled:
+            section.pop("api_key", None)
+        data["pipeline"] = section
+        self._write(data)
+        return self.get_pipeline_settings()
+
+    def pipeline_cloud_override(self) -> dict[str, Any] | None:
+        """返回传给 vlm-bridge 的单次覆盖配置；未启用或配置不全时返回 None。"""
+        section = self._read().get("pipeline", {})
+        if not bool(section.get("cloud_enabled", False)):
+            return None
+        api_base = str(section.get("api_base", "")).strip()
+        model = str(section.get("model", "")).strip()
+        api_key = str(section.get("api_key", "")).strip()
+        if not (api_base and model and api_key):
+            return None
+        return {
+            "base_url": api_base,
+            "model": model,
+            "api_key": api_key,
+            "timeout": float(section.get("timeout_seconds", 60)),
+            "max_tokens": int(section.get("max_tokens", 256)),
+        }
+
+    # --- （lg0219）运行参数：即时生效 ---
+
+    def get_runtime_settings(self) -> RuntimeSettingsOut:
+        section = self._read().get("runtime", {})
+        default_upload_mb = max(1, self.settings.max_upload_bytes // (1024 * 1024))
+        default_video_mb = max(1, self.settings.max_video_upload_bytes // (1024 * 1024))
+        return RuntimeSettingsOut(
+            yolo_executable=str(section.get("yolo_executable", "")).strip(),
+            max_upload_mb=int(section.get("max_upload_mb", default_upload_mb)),
+            max_video_upload_mb=int(section.get("max_video_upload_mb", default_video_mb)),
+            max_video_duration_seconds=int(
+                section.get("max_video_duration_seconds", self.settings.max_video_duration_seconds)
+            ),
+            model_source=str(section.get("model_source", "official") or "official").strip(),
+            model_source_custom=str(section.get("model_source_custom", "")).strip(),
+        )
+
+    def update_runtime_settings(self, payload: RuntimeSettingsUpdate) -> RuntimeSettingsOut:
+        data = self._read()
+        section = dict(data.get("runtime") or {})
+        section["yolo_executable"] = payload.yolo_executable.strip()
+        section["max_upload_mb"] = payload.max_upload_mb
+        section["max_video_upload_mb"] = payload.max_video_upload_mb
+        section["max_video_duration_seconds"] = payload.max_video_duration_seconds
+        section["model_source"] = payload.model_source.strip() or "official"
+        section["model_source_custom"] = payload.model_source_custom.strip()
+        data["runtime"] = section
+        self._write(data)
+        return self.get_runtime_settings()
+
+    def effective_settings(self) -> Settings:
+        """把界面可配的运行参数叠加到启动配置上，供上传等校验使用。"""
+        runtime = self.get_runtime_settings()
+        return replace(
+            self.settings,
+            max_upload_bytes=runtime.max_upload_mb * 1024 * 1024,
+            max_video_upload_bytes=runtime.max_video_upload_mb * 1024 * 1024,
+            max_video_duration_seconds=runtime.max_video_duration_seconds,
+        )
+
+    # --- （lg0219）部署信息：只读展示 ---
+
+    def deployment_info(self) -> DeploymentInfoResponse:
+        items = [
+            DeploymentItem(
+                key="data_dir",
+                label="数据目录",
+                value=str(self.settings.data_dir),
+                note="数据集、模型、导出文件都在这里。修改需设置环境变量 YWA_DATA_DIR 并重启。",
+            ),
+            DeploymentItem(
+                key="import_root",
+                label="导入根目录",
+                value=str(self.settings.import_root),
+                note="服务端目录扫描只允许在此之下。修改需设置 YWA_IMPORT_ROOT 并重启。",
+            ),
+            DeploymentItem(
+                key="database_url",
+                label="数据库地址",
+                value=self.settings.database_url,
+                note="修改需设置 YWA_DATABASE_URL 并重启。",
+            ),
+            DeploymentItem(
+                key="listen",
+                label="监听地址",
+                value=f"{self.settings.host}:{self.settings.port}",
+                note="修改需设置 YWA_HOST / YWA_PORT 并重启。",
+            ),
+            DeploymentItem(
+                key="cors_origins",
+                label="跨域白名单",
+                value=", ".join(self.settings.cors_origins),
+                note="修改需设置 YWA_CORS_ORIGINS 并重启。",
+            ),
+            DeploymentItem(
+                key="bridge_url",
+                label="智能分析服务地址",
+                value=os.environ.get("YWA_BRIDGE_URL", "http://127.0.0.1:8002"),
+                note="修改需设置 YWA_BRIDGE_URL 并重启。",
+            ),
+        ]
+        return DeploymentInfoResponse(items=items)
 
     def _resolved_api_key(self, llm: dict[str, Any]) -> str:
         raw = llm.get("api_key")

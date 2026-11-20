@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_session, get_settings, get_storage
+from app.api.dependencies import get_effective_settings, get_session, get_settings, get_storage
 from app.core.config import Settings
 from app.core.errors import NotFoundError, ValidationError
 from app.core.ids import new_id
@@ -143,7 +143,7 @@ async def import_yolo_archive(
     default_split: SplitName = Form(default="train"),
     session: Session = Depends(get_session),
     storage: Storage = Depends(get_storage),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_effective_settings),
 ) -> YoloImportResponse:
     content = await _read_upload(file, settings.max_upload_bytes)
     if not name.strip():
@@ -176,7 +176,7 @@ async def import_coco_archive(
     description: str | None = Form(default=None),
     session: Session = Depends(get_session),
     storage: Storage = Depends(get_storage),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_effective_settings),
 ) -> YoloImportResponse:
     dataset, images, annotations = import_coco(
         session,
@@ -257,7 +257,7 @@ async def upload_images(
     split: SplitName = Form(default="train"),
     session: Session = Depends(get_session),
     storage: Storage = Depends(get_storage),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_effective_settings),
 ) -> UploadImagesResponse:
     uploads: list[tuple[str, bytes]] = []
     total = 0

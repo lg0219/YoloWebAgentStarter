@@ -28,13 +28,17 @@ import type {
   AnnotationSettings,
   TrainingDevice,
   ValidationReport,
+  PipelineSettings,
+  PipelineSettingsUpdate,
+  RuntimeSettings,
+  DeploymentInfo,
+  WeightStatus,
+  WeightDownloadState,
 } from "../types";
 
-const API_BASE = (import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000").replace(/\/$/, "");
+import { apiUrl } from "./runtimeConfig";
 
-export function apiUrl(path: string): string {
-  return `${API_BASE}${path}`;
-}
+export { apiUrl };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(apiUrl(path), init);
@@ -65,8 +69,7 @@ export const api = {
   // （lg0219）标注线宽偏好：GET/PUT /api/settings/annotation，口径为屏幕像素。
   getAnnotationSettings: () => request<AnnotationSettings>("/api/settings/annotation"),
   updateAnnotationSettings: (payload: { line_width: number }) => request<AnnotationSettings>("/api/settings/annotation", json(payload, "PUT")),
-  getLlmSettings: () => request<LLMSettings>("/api/settings/llm"),
-  updateLlmSettings: (payload: Omit<LLMSettings, "api_key_configured"> & { api_key?: string }) =>
+  getLlmSettings: () => request<LLMSettings>("/api/settings/llm"),  updateLlmSettings: (payload: Omit<LLMSettings, "api_key_configured"> & { api_key?: string }) =>
     request<LLMSettings>("/api/settings/llm", json(payload, "PUT")),
   testLlmConnection: (payload: {
     api_base: string;
@@ -207,4 +210,19 @@ export const api = {
     if (options.level) query.set("level", options.level);
     return request<RuntimeLogResponse>(`/api/logs/runtime${query.toString() ? `?${query.toString()}` : ""}`);
   },
+  // （lg0219）智能分析：云端解释（可选）
+  getPipelineSettings: () => request<PipelineSettings>("/api/settings/pipeline"),
+  updatePipelineSettings: (payload: PipelineSettingsUpdate) =>
+    request<PipelineSettings>("/api/settings/pipeline", json(payload, "PUT")),
+  // （lg0219）运行参数：即时生效
+  getRuntimeSettings: () => request<RuntimeSettings>("/api/settings/runtime"),
+  updateRuntimeSettings: (payload: RuntimeSettings) =>
+    request<RuntimeSettings>("/api/settings/runtime", json(payload, "PUT")),
+  // （lg0219）部署信息：只读
+  getDeploymentInfo: () => request<DeploymentInfo>("/api/settings/deployment"),
+  // （lg0219）预训练权重：训练前必须先下载
+  getWeightStatus: (model: string) =>
+    request<WeightStatus>(`/api/training/weights/status?model=${encodeURIComponent(model)}`),
+  startWeightDownload: (model: string) =>
+    request<WeightDownloadState>("/api/training/weights/download", json({ model })),
 };
