@@ -52,7 +52,7 @@ def create_app(settings: Settings | None = None, *, run_migrations: bool = True)
             app.state.agent_executor.shutdown()
             database.dispose()
 
-    app = FastAPI(title="YoloWebAgentStarter API", version="0.1.0-dev", lifespan=lifespan)
+    app = FastAPI(title="YoloWebAgentStarter API", version="0.2.0", lifespan=lifespan)
     app.state.settings = resolved
     app.state.database = database
     app.state.storage = storage
