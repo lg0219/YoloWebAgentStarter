@@ -165,16 +165,18 @@ def _write_results_csv(output_dir: Path, epochs: int, text: str = "") -> None:
         matches = re.findall(pattern, text)
         return matches[-1].strip() if matches else ""
 
-    map50 = last_value(r"IoU=0\.50\s+\|[^=]+=\s*([\d.\-]+)")
-    map50_95 = last_value(r"IoU=0\.50:0\.95 \|[^=]+=\s*([\d.\-]+)")
-    losses = re.findall(r"loss: ([\d.]+)", text)
+    # 只取 area=all 那一行：后面还有 area=small / medium / large，large 常是 -1
+    map50 = last_value(r"IoU=0\.50\s+\| area=\s+all \| maxDets=100\s*\]\s*=\s*([\d.\-]+)")
+    map50_95 = last_value(r"IoU=0\.50:0\.95 \| area=\s+all \| maxDets=100\s*\]\s*=\s*([\d.\-]+)")
+    losses = re.findall(r"loss: ([\d.]+) \(([\d.]+)\)", text)
+    loss_value = losses[-1][1] if losses else ""  # 取括号里的滑动平均，与 YOLO 的口径一致
     if not map50 and not map50_95:
         return
     target = output_dir / "results.csv"
     with target.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(["epoch", "time", "train/loss", "metrics/mAP50(B)", "metrics/mAP50-95(B)"])
-        writer.writerow([max(int(epochs), 1), "", losses[-1] if losses else "", map50, map50_95])
+        writer.writerow([max(int(epochs), 1), "", loss_value, map50, map50_95])
 
 
 def main(argv: list[str] | None = None) -> int:
