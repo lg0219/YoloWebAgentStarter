@@ -138,14 +138,41 @@ export function formatGpuMemory(device: TrainingDevice): string {
   return `${Math.round(device.memory_free_mb / 1024)} / ${total} GB 可用`;
 }
 
-export function estimateMinutes(epochs: number, imageCount: number, batchSize: number, gpuCount: number): number {
-  const steps = Math.max(1, Math.ceil(Math.max(imageCount, 1) / Math.max(batchSize, 1)) * epochs);
-  const perStepSec = gpuCount > 1 ? 0.35 : 0.55;
-  return Math.max(1, Math.round((steps * perStepSec) / 60));
+// 每步耗时（CPU 实测标定，单位秒）。显卡只有 YOLO 侧的历史经验值，其余引擎不猜。
+const CPU_SECONDS_PER_STEP: Record<string, number> = { yolo: 0.55, rfdetr: 14, rtdetrv2: 11 };
+const GPU_SECONDS_PER_STEP: Record<string, number> = { yolo: 0.55 };
+
+export interface EstimateInput {
+  engine: string;
+  epochs: number;
+  /** 实际参与训练的张数（已扣除验证集与未标注图），不是数据集总张数 */
+  trainImages: number;
+  batchSize: number;
+  deviceType: "auto" | "cpu" | "mps" | "cuda";
+  gpuCount: number;
 }
 
-export function estimateOptimizerSteps(epochs: number, imageCount: number, batchSize: number): number {
-  return Math.max(1, Math.ceil(Math.max(imageCount, 1) / Math.max(batchSize, 1)) * epochs);
+/** 预估参与训练的张数：按已标注数量与验证集比例折算。 */
+export function estimateTrainImages(imageCount: number, annotatedCount: number, valRatio: number): number {
+  const usable = annotatedCount > 0 ? Math.min(annotatedCount, imageCount) : imageCount;
+  return Math.max(1, Math.round(usable * (1 - Math.min(Math.max(valRatio, 0), 0.9))));
+}
+
+export function estimateOptimizerSteps(epochs: number, trainImages: number, batchSize: number): number {
+  return Math.max(1, Math.ceil(Math.max(trainImages, 1) / Math.max(batchSize, 1)) * epochs);
+}
+
+/** 预估训练时长（分钟）。显卡上尚未按引擎标定，返回 null 表示不给具体数字。 */
+export function estimateMinutes(input: EstimateInput): number | null {
+  const steps = estimateOptimizerSteps(input.epochs, input.trainImages, input.batchSize);
+  const onGpu = input.deviceType === "cuda";
+  if (onGpu) {
+    const perStep = GPU_SECONDS_PER_STEP[input.engine];
+    if (perStep === undefined) return null;
+    return Math.max(1, Math.round((steps * (input.gpuCount > 1 ? perStep * 0.65 : perStep)) / 60));
+  }
+  const perStep = CPU_SECONDS_PER_STEP[input.engine] ?? CPU_SECONDS_PER_STEP.yolo;
+  return Math.max(1, Math.round((steps * perStep) / 60));
 }
 
 export function applyTaskToForm(task: TrainingTask): TrainingFormState {
