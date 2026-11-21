@@ -33,7 +33,13 @@ class ProcessRegistry:
             if os.name == "posix":
                 os.killpg(process.pid, signal.SIGTERM)
             else:
-                process.terminate()
+                # Windows 的 terminate 只杀父进程；训练里的 dataloader 子进程会继续活着，
+                # 并且还占着 stdout 管道，导致上层读循环永远等不到 EOF，任务是停不下来的状态。
+                subprocess.run(
+                    ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                    capture_output=True,
+                    check=False,
+                )
         except OSError:
             return False
         return True

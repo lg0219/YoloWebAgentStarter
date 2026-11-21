@@ -11,6 +11,7 @@ import {
   defaultForm,
   defaultModelFor,
   estimateMinutes,
+  estimateTrainImages,
   pickPreset,
   resolveDeviceString,
   taskTypeLabel,
@@ -180,7 +181,15 @@ export function TrainingView({ datasets, dataset, onDatasetChange, onOpenModels,
     ? "图片不足 2 张时无法同时构成 train / val，创建任务可能失败。"
     : `将使用已持久化的 split 训练 ${taskTypeLabel(dataset.task_type)} 模型；请确认 train 与 val 均非空。`;
 
-  const summaryBottomBar = `${form.model} · ${form.epochs} ep · batch ${form.batch_size} · ${form.img_size}px · ${resolveDeviceString(form)} · 约 ${estimateMinutes(form.epochs, dataset.image_count, form.batch_size, form.device_type === "cuda" ? Math.max(form.gpu_ids.length, 1) : 1)} 分钟`;
+  const estimatedMinutes = estimateMinutes({
+    engine: form.engine,
+    epochs: form.epochs,
+    trainImages: estimateTrainImages(dataset.image_count, dataset.annotated_image_count, form.val_ratio),
+    batchSize: form.batch_size,
+    deviceType: form.device_type,
+    gpuCount: form.device_type === "cuda" ? Math.max(form.gpu_ids.length, 1) : 1,
+  });
+  const summaryBottomBar = `${form.model} · ${form.epochs} ep · batch ${form.batch_size} · ${form.img_size}px · ${resolveDeviceString(form)} · ${estimatedMinutes === null ? "显卡耗时暂不估算" : `约 ${estimatedMinutes} 分钟`}`;
 
   const start = async (event: FormEvent) => {
     event.preventDefault();

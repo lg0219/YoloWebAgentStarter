@@ -3,6 +3,7 @@ import {
   deviceStatusLabel,
   estimateMinutes,
   estimateOptimizerSteps,
+  estimateTrainImages,
   formatGpuMemory,
   taskTypeLabel,
   type ComputeMode,
@@ -37,8 +38,16 @@ export function TrainingComputeRail({
   const hasMps = devices.some((item) => item.type === "mps" && item.status !== "unavailable");
   const gpuCount = form.device_type === "cuda" ? Math.max(form.gpu_ids.length, 1) : 1;
   const totalBatch = form.batch_size * (form.compute_mode === "multi" ? Math.max(form.gpu_ids.length, 1) : 1);
-  const steps = estimateOptimizerSteps(form.epochs, dataset.image_count, form.batch_size);
-  const estMinutes = estimateMinutes(form.epochs, dataset.image_count, form.batch_size, gpuCount);
+  const trainImages = estimateTrainImages(dataset.image_count, dataset.annotated_image_count, form.val_ratio);
+  const steps = estimateOptimizerSteps(form.epochs, trainImages, form.batch_size);
+  const estMinutes = estimateMinutes({
+    engine: form.engine,
+    epochs: form.epochs,
+    trainImages,
+    batchSize: form.batch_size,
+    deviceType: form.device_type,
+    gpuCount,
+  });
 
   const setDeviceType = (deviceType: DeviceType) => {
     setForm((prev) => {
@@ -185,7 +194,7 @@ export function TrainingComputeRail({
           <div>
             <dt>预估时长</dt>
             <dd className="training-dataset-est-row">
-              <IconClock size={14} /> 约 {estMinutes} 分钟
+              <IconClock size={14} /> {estMinutes === null ? "显卡上暂不估算" : `约 ${estMinutes} 分钟`}
             </dd>
           </div>
         </dl>

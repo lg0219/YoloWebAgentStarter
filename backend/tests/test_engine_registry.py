@@ -56,6 +56,31 @@ def test_rfdetr_only_supports_detect() -> None:
     assert not engine.supports_task(TaskType.SEGMENT)
 
 
+def test_rfdetr_offers_official_variants() -> None:
+    engine = get_engine("rfdetr")
+    assert engine.model_choices == ("nano", "small", "base", "medium", "large")
+    assert engine.allows_blank_model is True
+
+
+def test_rfdetr_argv_maps_variant_and_weights(tmp_path: Path) -> None:
+    engine = get_engine("rfdetr")
+
+    variant = engine.build_train_argv(_spec(model="nano"))
+    assert variant[variant.index("--variant") + 1] == "nano"
+    assert "--weights" not in variant
+
+    blank = engine.build_train_argv(_spec(model=""))
+    assert "--variant" not in blank and "--weights" not in blank
+
+    weight = tmp_path / "rfdetr-base.pth"
+    weight.write_bytes(b"weights")
+    with_weights = engine.build_train_argv(_spec(model=str(weight)))
+    assert "--weights" in with_weights
+
+    with pytest.raises(ValidationError):
+        engine.build_train_argv(_spec(model=str(tmp_path / "missing.pth")))
+
+
 def test_unknown_engine_is_rejected() -> None:
     with pytest.raises(ValidationError):
         get_engine("rtdetr")
@@ -93,9 +118,11 @@ def test_yolo_train_argv_carries_deterministic_switch() -> None:
     assert not any(item.startswith("deterministic=") for item in absent)
 
 
-def test_rfdetr_train_argv_uses_runner_flags() -> None:
+def test_rfdetr_train_argv_uses_runner_flags(tmp_path: Path) -> None:
+    weight = tmp_path / "rfdetr-base.pth"
+    weight.write_bytes(b"weights")
     argv = get_engine("rfdetr").build_train_argv(
-        _spec(model="checkpoints/rfdetr-base.pth", device="cpu")
+        _spec(model=str(weight), device="cpu")
     )
     assert argv[0] == "rfdetr"
     assert "--dataset-dir" in argv

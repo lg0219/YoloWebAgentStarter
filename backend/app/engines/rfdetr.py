@@ -15,6 +15,9 @@ from app.core.task_types import TaskType
 from app.engines.base import EngineInfo, ModelEngine, TrainSpec
 from app.models.result_parser import Detection
 
+# 官方发布过预训练权重的档位，值即 rfdetr 包里的模型类后缀
+VARIANT_CHOICES = ("nano", "small", "base", "medium", "large")
+
 
 def _resolve_source_root() -> Path:
     """定位仓库根目录，用于给子进程设置 PYTHONPATH。"""
@@ -32,6 +35,10 @@ class RfDetrEngine(ModelEngine):
     # RF-DETR 只接受这些训练参数；分辨率与优化器由框架自身决定
     supported_params = frozenset({"model", "epochs", "batch_size", "device", "seed"})
     fixed_params = {"img_size": "使用模型变体默认分辨率", "optimizer": "框架内部默认", "workers": "不支持多进程加载"}
+
+    # 基础权重可留空或填档位名，由框架下载对应的官方预训练权重
+    allows_blank_model = True
+    model_choices = VARIANT_CHOICES
 
     def command_prefix(self) -> list[str]:
         return [sys.executable, "-m", "app.engines.rfdetr_runner"]
@@ -53,21 +60,38 @@ class RfDetrEngine(ModelEngine):
             "--device", spec.device,
             "--seed", str(spec.seed),
         ]
-        if spec.model:
-            argv.extend(["--weights", spec.model])
+        model = (spec.model or "").strip()
+        if model:
+            candidate = Path(model).expanduser()
+            if candidate.is_file():
+                argv.extend(["--weights", model])
+            elif candidate.is_absolute() or candidate.parent != Path(".") or candidate.suffix.lower() in {".pth", ".pt"}:
+                # 看起来是权重文件但找不到，别把它当成档位名
+                raise ValidationError(
+                    "model_file_missing",
+                    f"权重文件不存在：{model}",
+                    details={"model": model},
+                )
+            else:
+                # 不是文件就按档位处理，由框架下载对应官方预训练权重
+                argv.extend(["--variant", model])
         if spec.resume:
             argv.append("--resume")
         return argv
 
     def load_model(self, model_id: str, model_path: Path) -> Any:
         try:
-            from rfdetr import RFDETRBase
+            from rfdetr import RFDETR, RFDETRBase
         except ImportError as exc:  # 依赖是可选安装
             raise ValidationError(
                 "engine_dependency_missing",
                 "未安装 RF-DETR 依赖，请执行：pip install -r backend/requirements-detr.txt",
             ) from exc
-        return RFDETRBase(pretrain_weights=str(model_path))
+        # 训练产物里记录了档位，from_checkpoint 能按记录还原正确的模型类
+        try:
+            return RFDETR.from_checkpoint(str(model_path))
+        except Exception:
+            return RFDETRBase(pretrain_weights=str(model_path))
 
     def infer(
         self,

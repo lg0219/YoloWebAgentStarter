@@ -71,6 +71,8 @@
   max-width: var(--page-content-max-wide);
   margin: 0 auto;
   padding: 28px 36px 48px;
+  /* 页内任何内容都不应把整页横向撑开（列数会随可用宽度变化） */
+  overflow-x: clip;
 }
 
 .training-workspace-page .training-head {
@@ -1049,8 +1051,37 @@
 
 .training-ws-history-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  /* 固定列数：列宽只由容器宽度决定，不再被卡片内容（指标/错误文案）撑宽而改变列数 */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+  min-width: 0;
+}
+
+@media (max-width: 1280px) {
+  .training-ws-history-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  .training-ws-history-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* 历史区左侧容器与卡片都允许收缩，避免内容把整页横向撑开导致列数变化 */
+.training-ws-history,
+.training-ws-history > * {
+  min-width: 0;
+}
+
+.training-ws-exp-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.training-ws-exp-card > * {
+  min-width: 0;
 }
 
 .training-ws-exp-card {
@@ -2468,7 +2499,8 @@
 }
 
 .training-weight-actions .button {
-  min-width: 104px;
+  /* 文案会在「下载权重 / 下载中 45.2% / 已下载」之间切换，固定宽度避免按钮抖动挤动整行 */
+  min-width: 140px;
 }
 
 .training-weight-state {
